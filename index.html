@@ -98,6 +98,20 @@
 
         <div class="history-list" id="history-list"></div>
 
+        <article id="history-detail-card" class="history-detail-card hidden" aria-live="polite">
+          <div class="history-detail-head">
+            <div>
+              <p id="history-detail-date" class="eyebrow"></p>
+              <h3 id="history-detail-emotion"></h3>
+            </div>
+          </div>
+
+          <p id="history-detail-summary" class="history-detail-summary"></p>
+          <div id="history-detail-keywords" class="history-keywords"></div>
+          <p id="history-detail-content" class="history-detail-content"></p>
+          <p id="history-detail-reflection" class="history-detail-reflection"></p>
+        </article>
+
         <button id="floating-write-button" class="floating-write-button" type="button">+</button>
       </aside>
     </main>
@@ -108,7 +122,7 @@
           <span class="history-date"></span>
           <span class="history-emotion"></span>
         </div>
-        <p class="history-preview"></p>
+        <p class="history-summary"></p>
         <div class="history-keywords"></div>
       </button>
     </template>

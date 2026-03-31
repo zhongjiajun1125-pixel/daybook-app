@@ -46,12 +46,16 @@ input {
   right: 20px;
   z-index: 5;
   border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.34);
-  color: #a0a8b6;
+  background: rgba(255, 255, 255, 0.58);
+  color: #8f99a8;
   font-size: 12px;
   cursor: pointer;
-  padding: 0;
+  min-width: 40px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
   letter-spacing: 0.06em;
+  backdrop-filter: blur(16px);
 }
 
 .compose-view,
@@ -319,6 +323,47 @@ input {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.history-summary {
+  margin: 10px 0 0;
+  color: var(--text);
+  line-height: 1.65;
+}
+
+.history-detail-card {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: var(--shadow);
+}
+
+.history-detail-head h3 {
+  margin: 4px 0 0;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.history-detail-summary,
+.history-detail-reflection,
+.history-detail-content {
+  margin: 14px 0 0;
+  line-height: 1.72;
+}
+
+.history-detail-summary {
+  color: #314053;
+}
+
+.history-detail-content {
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.history-detail-reflection {
+  color: #5b6678;
 }
 
 .floating-write-button {

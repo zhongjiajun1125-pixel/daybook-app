@@ -25,17 +25,26 @@ const elements = {
   closeHistoryButton: document.querySelector("#close-history-button"),
   historySearchInput: document.querySelector("#history-search-input"),
   historyList: document.querySelector("#history-list"),
+  historyDetailCard: document.querySelector("#history-detail-card"),
+  historyDetailDate: document.querySelector("#history-detail-date"),
+  historyDetailEmotion: document.querySelector("#history-detail-emotion"),
+  historyDetailSummary: document.querySelector("#history-detail-summary"),
+  historyDetailKeywords: document.querySelector("#history-detail-keywords"),
+  historyDetailContent: document.querySelector("#history-detail-content"),
+  historyDetailReflection: document.querySelector("#history-detail-reflection"),
   floatingWriteButton: document.querySelector("#floating-write-button"),
   historyItemTemplate: document.querySelector("#history-item-template"),
 };
 
 const state = {
-  entries: loadEntries(),
+  entries: loadEntries().sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)),
   draft: loadDraft(),
   currentView: "compose",
   currentFeedback: null,
   historyOpen: false,
   historyQuery: "",
+  selectedHistoryId: null,
+  selfCheck: { failures: [] },
 };
 
 initialize();
@@ -43,7 +52,9 @@ initialize();
 function initialize() {
   elements.entryInput.value = state.draft;
   bindEvents();
+  syncStateFromHash();
   render();
+  runSelfCheck("initialize");
   requestAnimationFrame(() => {
     elements.entryInput.focus();
   });
@@ -71,6 +82,13 @@ function bindEvents() {
   elements.historySearchInput.addEventListener("input", () => {
     state.historyQuery = elements.historySearchInput.value.trim().toLowerCase();
     renderHistory();
+    runSelfCheck("history-search");
+  });
+
+  window.addEventListener("hashchange", () => {
+    syncStateFromHash();
+    render();
+    runSelfCheck("hashchange");
   });
 }
 
@@ -171,7 +189,7 @@ function renderHistory() {
     const node = elements.historyItemTemplate.content.firstElementChild.cloneNode(true);
     node.querySelector(".history-date").textContent = formatDate(entry.createdAt);
     node.querySelector(".history-emotion").textContent = entry.feedback.emotion;
-    node.querySelector(".history-preview").textContent = entry.content;
+    node.querySelector(".history-summary").textContent = entry.feedback.summary;
 
     const keywordWrap = node.querySelector(".history-keywords");
     entry.feedback.keywords.forEach((keyword) => {
@@ -182,14 +200,24 @@ function renderHistory() {
     });
 
     node.addEventListener("click", () => {
-      state.currentFeedback = entry.feedback;
-      state.currentView = "feedback";
-      closeHistory();
+      state.selectedHistoryId = entry.id;
+      renderHistoryDetail(entry);
+      runSelfCheck("history-open-detail");
       render();
     });
 
     elements.historyList.appendChild(node);
   });
+
+  const selectedEntry =
+    filtered.find((entry) => entry.id === state.selectedHistoryId) || filtered[0] || null;
+
+  if (selectedEntry) {
+    state.selectedHistoryId = selectedEntry.id;
+    renderHistoryDetail(selectedEntry);
+  } else {
+    hideHistoryDetail();
+  }
 }
 
 async function submitEntry() {
@@ -210,6 +238,7 @@ async function submitEntry() {
   };
 
   state.entries.unshift(entry);
+  state.selectedHistoryId = entry.id;
   state.currentFeedback = feedback;
   state.currentView = "feedback";
   state.draft = "";
@@ -218,6 +247,7 @@ async function submitEntry() {
   elements.entryInput.value = "";
   elements.saveHint.textContent = "自动保存草稿";
   render();
+  runSelfCheck("submit");
 }
 
 function backToWrite() {
@@ -230,15 +260,50 @@ function backToWrite() {
 
 function openHistory() {
   state.historyOpen = true;
+  if (window.location.hash !== "#history") {
+    window.location.hash = "history";
+    return;
+  }
   render();
+  runSelfCheck("open-history");
 }
 
 function closeHistory() {
   state.historyOpen = false;
+  if (window.location.hash === "#history") {
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  }
   render();
+  runSelfCheck("close-history");
   requestAnimationFrame(() => {
     elements.entryInput.focus();
   });
+}
+
+function syncStateFromHash() {
+  state.historyOpen = window.location.hash === "#history";
+}
+
+function renderHistoryDetail(entry) {
+  elements.historyDetailCard.classList.remove("hidden");
+  elements.historyDetailDate.textContent = formatDate(entry.createdAt);
+  elements.historyDetailEmotion.textContent = entry.feedback.emotion;
+  elements.historyDetailSummary.textContent = entry.feedback.summary;
+  elements.historyDetailContent.textContent = entry.content;
+  elements.historyDetailReflection.textContent = entry.feedback.reflection;
+  elements.historyDetailKeywords.innerHTML = "";
+
+  entry.feedback.keywords.forEach((keyword) => {
+    const tag = document.createElement("span");
+    tag.className = "keyword-tag";
+    tag.textContent = keyword;
+    elements.historyDetailKeywords.appendChild(tag);
+  });
+}
+
+function hideHistoryDetail() {
+  elements.historyDetailCard.classList.add("hidden");
+  elements.historyDetailKeywords.innerHTML = "";
 }
 
 function analyzeEntry(content, previousEntries) {
@@ -402,4 +467,47 @@ function loadDraft() {
 
 function persistDraft() {
   window.localStorage.setItem(DRAFT_KEY, state.draft);
+}
+
+function runSelfCheck(context) {
+  const failures = [];
+
+  if (!elements.entryInput || !elements.submitButton) {
+    failures.push("记录创建路径不可用");
+  }
+
+  if (state.currentView === "feedback" && !state.currentFeedback) {
+    failures.push("AI 反馈页缺少反馈数据");
+  }
+
+  if (!elements.historyToggle || !elements.historyPanel) {
+    failures.push("历史入口或历史容器缺失");
+  }
+
+  if (state.historyOpen && state.entries.length > 0 && !elements.historyList.children.length) {
+    failures.push("历史页未加载任何记录");
+  }
+
+  if (
+    state.historyOpen &&
+    state.entries.length > 0 &&
+    state.selectedHistoryId &&
+    elements.historyDetailCard.classList.contains("hidden")
+  ) {
+    failures.push("历史记录详情未展开");
+  }
+
+  state.selfCheck.failures = failures;
+  window.__inknoteHealth = {
+    context,
+    ok: failures.length === 0,
+    failures: [...failures],
+    entries: state.entries.length,
+    view: state.currentView,
+    historyOpen: state.historyOpen,
+  };
+
+  if (failures.length) {
+    console.error("[Inknote self-check failed]", context, failures);
+  }
 }
