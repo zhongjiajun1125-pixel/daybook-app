@@ -1,5 +1,6 @@
 /**
- * Trace - 认知显影系统 (Engineering v2.0)
+ * Trace - 认知显影系统 (Engineering v2.1)
+ * 补全：高频删改判定、重度斟酌标签、打字时长记录
  */
 
 const DB_NAME = "TraceCognitionDB";
@@ -37,10 +38,10 @@ let state = {
   isLoaded: false 
 };
 
+// 核心指标：打字时长与摩擦力记录
 let implicitSession = { startMs: null, backspaceCount: 0 };
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-// Zen Pulse：空灵脉冲音效
 function playTraceFeedback() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const osc = audioCtx.createOscillator();
@@ -212,6 +213,10 @@ async function submitEntry() {
   const now = new Date();
   let entry;
 
+  // 计算打字时长
+  const durationSec = implicitSession.startMs ? Math.round((Date.now() - implicitSession.startMs) / 1000) : 0;
+  const friction = implicitSession.backspaceCount;
+
   if (state.editingId) {
     const oldEntry = state.entries.find(e => e.id === state.editingId);
     entry = { ...oldEntry, content, lastModified: now.toISOString(), context: { ...oldEntry.context, isEdited: true } };
@@ -224,8 +229,8 @@ async function submitEntry() {
       content,
       timestamp: now.toISOString(),
       context: { 
-        durationSec: Math.round((Date.now() - (implicitSession.startMs || Date.now())) / 1000), 
-        friction: implicitSession.backspaceCount, 
+        durationSec, 
+        friction, 
         timePhase 
       }
     };
@@ -248,10 +253,12 @@ async function submitEntry() {
     elements.saveStatus.textContent = "认知已封存 ✓";
     setTimeout(() => elements.saveStatus.textContent = "", 2000);
     checkSystemEcho(); 
+    // 重置 Session 指标
     implicitSession = { startMs: null, backspaceCount: 0 };
   }, 800); 
 }
 
+// 补全：基于时长和修改频率的显影判断
 function checkSystemEcho() {
   const panel = elements.systemEchoPanel;
   panel.innerHTML = "";
@@ -262,13 +269,19 @@ function checkSystemEcho() {
   const contents = recentEntries.map(e => e.content);
   let echoText = "";
 
+  // 1. 模式判断：疲惫/焦虑
   const fatiguePatterns = ["累", "没劲", "疲", "卷"];
   const anxietyPatterns = ["烦", "急", "乱", "压力"];
+
+  // 2. 物理指标判断：高频删改
+  const highFrictionEntries = recentEntries.filter(e => e.context?.friction > 5);
 
   if (contents.filter(c => fatiguePatterns.some(p => c.includes(p))).length >= 3) {
     echoText = "系统注意到，在最近的记录频率中，“疲惫感”正在以高频切面出现。";
   } else if (contents.filter(c => anxietyPatterns.some(p => c.includes(p))).length >= 3) {
     echoText = "当前的认知流中充斥着高信噪比的“焦虑回声”，建议暂时剥离外部输入。";
+  } else if (highFrictionEntries.length >= 3) {
+    echoText = "系统监测到，你在记录最近几个想法时，伴随着高频的删改。";
   } else {
     const lateNightEntries = recentEntries.filter(e => e.context?.timePhase === "深夜");
     if (lateNightEntries.length >= 3) echoText = "你最近的深度输出集中发生在深夜，这是“自我结构”最易显影的时刻。";
@@ -331,6 +344,7 @@ function showView(viewName) {
 function openHistory() { state.historyOpen = true; elements.historyPanel.classList.remove("hidden"); renderHistory(); }
 function closeHistory() { state.historyOpen = false; elements.historyPanel.classList.add("hidden"); elements.rawMemoryInput.focus(); }
 
+// 补全：历史列表中的“重度斟酌”显影判断
 function renderHistory() {
   elements.historyList.innerHTML = "";
   if (!state.isLoaded) {
@@ -344,7 +358,18 @@ function renderHistory() {
   state.entries.forEach(entry => {
     const node = elements.historyEntryTemplate.content.firstElementChild.cloneNode(true);
     const date = new Date(entry.timestamp);
+    
     node.querySelector(".history-time").textContent = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+    
+    // 补全逻辑：如果摩擦力超过 5 次退格，显示标签
+    if (entry.context?.friction > 5) {
+      const fNode = node.querySelector(".history-friction");
+      if (fNode) {
+        fNode.textContent = "• 重度斟酌"; 
+        fNode.classList.remove("hidden");
+      }
+    }
+
     node.querySelector(".history-raw-text").textContent = entry.content;
     node.style.cursor = "pointer";
     node.addEventListener("click", () => loadEntryForEdit(entry.id));
