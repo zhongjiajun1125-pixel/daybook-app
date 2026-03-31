@@ -8,210 +8,109 @@
   </head>
   <body>
     <main class="app-shell">
-      <aside class="sidebar" id="sidebar">
-        <div class="sidebar-top">
-          <div>
-            <p class="section-kicker">纸上笔记</p>
-            <h1>Inknote</h1>
+      <button id="history-toggle" class="history-toggle" type="button" aria-label="查看历史">
+        记录
+      </button>
+
+      <section class="compose-view" id="compose-view">
+        <div class="compose-shell">
+          <div class="hero-copy">
+            <p class="hero-line">把你的生活，变成可以被看懂的数据。</p>
           </div>
-          <button id="create-note-button" class="icon-button strong" type="button" aria-label="新建笔记">
-            ＋
-          </button>
+
+          <article id="returning-card" class="context-card hidden" aria-live="polite">
+            <p id="returning-kicker" class="context-kicker"></p>
+            <p id="returning-summary" class="context-text"></p>
+          </article>
+
+          <article id="insight-card" class="context-card hidden" aria-live="polite">
+            <p id="streak-text" class="context-kicker"></p>
+            <p id="pattern-text" class="context-text"></p>
+          </article>
+
+          <textarea
+            id="entry-input"
+            class="entry-input"
+            placeholder="写下此刻。"
+            autofocus
+          ></textarea>
+
+          <div class="compose-footer">
+            <span id="save-hint">自动保存草稿</span>
+            <button id="submit-entry-button" class="submit-button" type="button">完成</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="loading-view hidden" id="loading-view">
+        <div class="loading-shell">
+          <span class="loading-dot"></span>
+          <p>正在理解这一条记录…</p>
+        </div>
+      </section>
+
+      <section class="feedback-view hidden" id="feedback-view">
+        <div class="feedback-shell">
+          <div class="feedback-header">
+            <p class="eyebrow">即时反馈</p>
+            <button id="back-to-write-button" class="back-button" type="button">继续写</button>
+          </div>
+
+          <article class="feedback-card">
+            <p class="card-label">summary</p>
+            <p id="feedback-summary" class="card-body"></p>
+          </article>
+
+          <article class="feedback-card">
+            <p class="card-label">emotion</p>
+            <div id="feedback-emotion" class="emotion-wrap"></div>
+          </article>
+
+          <article class="feedback-card">
+            <p class="card-label">keywords</p>
+            <div id="feedback-keywords" class="keyword-wrap"></div>
+          </article>
+
+          <article class="feedback-card">
+            <p class="card-label">reflection</p>
+            <p id="feedback-reflection" class="card-body reflection-body"></p>
+          </article>
+
+          <article class="feedback-card system-anchor-card">
+            <p class="card-label">system anchor</p>
+            <p id="feedback-anchor" class="system-anchor-text"></p>
+          </article>
+        </div>
+      </section>
+
+      <aside class="history-panel hidden" id="history-panel" aria-hidden="true">
+        <div class="history-header">
+          <div>
+            <p class="eyebrow">Timeline</p>
+            <h2>历史记录</h2>
+          </div>
+          <button id="close-history-button" class="history-close" type="button">返回输入</button>
         </div>
 
-        <label class="search-box" for="search-input">
-          <input id="search-input" type="search" placeholder="搜索标题、正文、标签" autocomplete="off" />
+        <label class="history-search" for="history-search-input">
+          <input id="history-search-input" type="search" placeholder="搜索记录、情绪、关键词" />
         </label>
 
-        <div class="filter-row" id="view-filter">
-          <button class="filter-pill active" type="button" data-view="all">全部</button>
-          <button class="filter-pill" type="button" data-view="pinned">置顶</button>
-          <button class="filter-pill" type="button" data-view="journal">日记</button>
-        </div>
+        <div class="history-list" id="history-list"></div>
 
-        <div class="filter-row mode-filter" id="file-mode-filter">
-          <button class="filter-pill active" type="button" data-mode="all">全部类型</button>
-          <button class="filter-pill" type="button" data-mode="fleeting">零碎</button>
-          <button class="filter-pill" type="button" data-mode="lasting">长期</button>
-          <button class="filter-pill" type="button" data-mode="project">项目</button>
-          <button class="filter-pill" type="button" data-mode="archive">归档</button>
-        </div>
-
-        <div class="sidebar-meta">
-          <span id="note-count">0 篇</span>
-          <span id="today-label"></span>
-        </div>
-
-        <div class="note-list" id="note-list"></div>
+        <button id="floating-write-button" class="floating-write-button" type="button">+</button>
       </aside>
-
-      <section class="workspace-shell">
-        <header class="workspace-header">
-          <div>
-            <p class="section-kicker">写字板</p>
-            <h2 id="editor-title-text">新的笔记</h2>
-            <p class="editor-meta" id="editor-meta">自动保存</p>
-          </div>
-          <div class="header-actions">
-            <button id="toggle-sidebar-button" class="icon-button" type="button">侧栏</button>
-            <button id="toggle-eye-mode-button" class="icon-button" type="button">护眼</button>
-            <button id="toggle-ambient-button" class="icon-button" type="button">雨声</button>
-            <button id="toggle-settings-button" class="icon-button" type="button">设置</button>
-            <button id="pin-note-button" class="icon-button" type="button">置顶</button>
-            <button id="delete-note-button" class="icon-button danger" type="button">删除</button>
-          </div>
-        </header>
-
-        <section class="workspace-card">
-          <div class="note-meta hidden" id="note-meta-panel">
-            <input id="note-title" class="title-input" type="text" placeholder="标题" />
-            <div class="meta-grid">
-              <label class="compact-field">
-                <span>心情</span>
-                <select id="note-mood">
-                  <option value="">不设置</option>
-                  <option value="平静">平静</option>
-                  <option value="开心">开心</option>
-                  <option value="专注">专注</option>
-                  <option value="疲惫">疲惫</option>
-                  <option value="低落">低落</option>
-                </select>
-              </label>
-              <label class="compact-field">
-                <span>标签</span>
-                <input id="note-tags" type="text" placeholder="生活, 工作" />
-              </label>
-              <label class="compact-field">
-                <span>字体</span>
-                <select id="note-font">
-                  <option value="sans">系统无衬线</option>
-                  <option value="serif">书写衬线</option>
-                  <option value="hand">手写感</option>
-                </select>
-              </label>
-              <label class="compact-field">
-                <span>纸张</span>
-                <select id="note-paper">
-                  <option value="lined">横线纸</option>
-                  <option value="plain">空白纸</option>
-                  <option value="grid">方格纸</option>
-                  <option value="dots">点阵纸</option>
-                </select>
-              </label>
-              <label class="compact-field">
-                <span>文件模式</span>
-                <select id="note-file-mode">
-                  <option value="fleeting">零碎</option>
-                  <option value="lasting">长期</option>
-                  <option value="project">项目</option>
-                  <option value="archive">归档</option>
-                </select>
-              </label>
-              <label class="compact-field">
-                <span>雨声音量</span>
-                <input id="ambient-volume" type="range" min="0" max="100" value="24" />
-              </label>
-            </div>
-          </div>
-
-          <section class="pad-shell">
-            <div class="pad-toolbar top-toolbar">
-              <button class="mini-icon-button" type="button" id="focus-text-button" title="专注输入文字">
-                <span class="tool-icon">⌨</span>
-                <span class="tool-label">文字</span>
-              </button>
-              <button class="mini-icon-button" type="button" id="toggle-draw-button" title="开启或关闭涂鸦模式">
-                <span class="tool-icon">✎</span>
-                <span class="tool-label">涂鸦</span>
-              </button>
-              <button class="mini-icon-button accent" type="button" id="insert-shape-button" title="插入重点提示文字">
-                <span class="tool-icon">⤿</span>
-                <span class="tool-label">重点</span>
-              </button>
-              <button class="mini-icon-button accent" type="button" id="insert-image-button" title="从设备选择一张图片">
-                <span class="tool-icon">⊞</span>
-                <span class="tool-label">图片</span>
-              </button>
-              <button class="mini-icon-button accent" type="button" id="dictate-button" title="把说话内容转换成文字">
-                <span class="tool-icon">⦿</span>
-                <span class="tool-label">语音</span>
-              </button>
-              <button class="mini-icon-button" type="button" id="insert-template-button" title="插入一个占位框">
-                <span class="tool-icon">⌷</span>
-                <span class="tool-label">占位框</span>
-              </button>
-              <button class="mini-icon-button" type="button" id="toggle-paper-button" title="快速切换纸张样式">
-                <span class="tool-icon">☰</span>
-                <span class="tool-label">纸张</span>
-              </button>
-            </div>
-
-            <div class="status-strip" id="status-strip">
-              <span class="status-dot" id="status-dot"></span>
-              <span id="status-text">准备就绪</span>
-            </div>
-
-            <div id="paper-surface" class="paper-surface paper-lined">
-              <div class="paper-inner">
-                <textarea
-                  id="note-content"
-                  class="content-input"
-                  placeholder="从这里开始写。"
-                ></textarea>
-                <div id="asset-board" class="asset-board"></div>
-                <canvas id="doodle-canvas" width="1400" height="1200"></canvas>
-              </div>
-            </div>
-
-            <div class="pad-toolbar bottom-toolbar">
-              <div class="color-strip">
-                <button class="color-chip active" type="button" data-color="#111111" style="--chip:#111111"></button>
-                <button class="color-chip" type="button" data-color="#ff3b30" style="--chip:#ff3b30"></button>
-                <button class="color-chip" type="button" data-color="#1d4ed8" style="--chip:#1d4ed8"></button>
-                <button class="color-chip" type="button" data-color="#99f6e4" style="--chip:#99f6e4"></button>
-              </div>
-              <div class="tool-strip">
-                <button class="bottom-tool-button" type="button" data-insert="timestamp">时间</button>
-                <button class="bottom-tool-button" type="button" data-insert="shape">重点框</button>
-                <button class="bottom-tool-button" type="button" data-insert="checklist">清单</button>
-                <button class="bottom-tool-button" type="button" data-action="erase">橡皮</button>
-                <button class="bottom-tool-button" type="button" data-action="save-image">导出涂鸦</button>
-              </div>
-            </div>
-          </section>
-
-          <footer class="editor-footer">
-            <span id="word-count">0 字</span>
-            <span id="created-at"></span>
-          </footer>
-        </section>
-      </section>
     </main>
 
-    <input id="image-upload-input" type="file" accept="image/*" hidden />
-
-    <template id="note-item-template">
-      <button class="note-item" type="button">
-        <div class="note-item-row">
-          <strong class="note-title"></strong>
-          <span class="note-pin"></span>
+    <template id="history-item-template">
+      <button class="history-item" type="button">
+        <div class="history-top">
+          <span class="history-date"></span>
+          <span class="history-emotion"></span>
         </div>
-        <p class="note-snippet"></p>
-        <div class="note-item-tags">
-          <span class="note-mode"></span>
-        </div>
-        <div class="note-item-row">
-          <span class="note-date"></span>
-          <span class="note-mood"></span>
-        </div>
+        <p class="history-preview"></p>
+        <div class="history-keywords"></div>
       </button>
-    </template>
-
-    <template id="asset-template">
-      <div class="asset-card">
-        <button class="asset-remove" type="button" aria-label="删除">×</button>
-        <div class="asset-body"></div>
-      </div>
     </template>
 
     <script src="./app.js"></script>
