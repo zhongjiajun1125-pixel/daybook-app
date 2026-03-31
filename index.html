@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1b1e" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)">
     
-    <title>Trace - 認知顯影系統</title>
+    <title>Trace - 认知显影系统</title>
     
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Ccircle cx='256' cy='256' r='200' fill='%23171717'/%3E%3C/svg%3E">
@@ -18,38 +18,38 @@
   <body class="time-day">
     <nav id="global-tools" class="hidden">
       <input type="file" id="import-file-input" accept=".json" style="display: none;" />
-      <button id="import-data-btn" class="ghost-btn" type="button">導入</button>
-      <button id="export-data-btn" class="ghost-btn" type="button">導出</button>
-      <button id="history-toggle" class="ghost-btn" type="button">歷史</button>
+      <button id="import-data-btn" class="ghost-btn" type="button">导入</button>
+      <button id="export-data-btn" class="ghost-btn" type="button">导出</button>
+      <button id="history-toggle" class="ghost-btn" type="button">历史</button>
     </nav>
 
     <main id="app-root" class="app-shell">
       
       <section id="unlock-view" class="view-section active" style="display: flex; align-items: center; justify-content: center; height: 100%;">
-        <button id="unlock-btn" class="ghost-btn" style="font-size: 1.1rem; letter-spacing: 0.2em; padding: 20px;">觸碰以喚醒</button>
+        <button id="unlock-btn" class="ghost-btn" style="font-size: 1.1rem; letter-spacing: 0.2em; padding: 20px;">触碰以唤醒</button>
       </section>
 
       <section id="onboarding-view" class="view-section hidden">
         <div class="narrative-shell">
-          <p>這裡是 Trace。</p>
-          <p>一個由 cyh 構建的認知顯影系統。</p>
+          <p>这里是 Trace。</p>
+          <p>一个由 cyh 构建的认知显影系统。</p>
           <br>
-          <p>它不會對你做任何評價。</p>
-          <p>不需要整理，也不需要寫得完整。</p>
-          <p>你只需要丟下一件正在發生的事，或一個閃現的想法。</p>
-          <p>哪怕只有幾個字。</p>
+          <p>它不会对你做任何评价。</p>
+          <p>不需要整理，也不需要写得完整。</p>
+          <p>你只需要丢下一件正在发生的事，或一个闪现的想法。</p>
+          <p>哪怕只有几个字。</p>
           <br>
-          <p>系統只負責吞嚥和保存。</p>
-          <p>並在未來的某一天，向你折射出潛意識的真實軌跡。</p>
+          <p>系统只负责吞咽和保存。</p>
+          <p>并在未来的某一天，向你折射出潜意识的真实轨迹。</p>
           <br>
-          <p>當你準備好了，留下第一道印跡。</p>
+          <p>当你准备好了，留下第一道印迹。</p>
           
           <p style="margin-top: 48px; font-size: 0.9rem; color: var(--text-ghost); font-family: 'Songti SC', serif; letter-spacing: 0.05em;">
             — Created by cyh
           </p>
         </div>
         <div class="action-shell">
-          <button id="enter-writing-btn" class="primary-action-btn" type="button">→ 開始記錄</button>
+          <button id="enter-writing-btn" class="primary-action-btn" type="button">→ 开始记录</button>
         </div>
       </section>
 
@@ -61,7 +61,7 @@
             <textarea
               id="raw-memory-input"
               class="seamless-input"
-              placeholder="寫下此刻。"
+              placeholder="写下此刻。"
               autofocus
             ></textarea>
           </article>
@@ -78,7 +78,7 @@
 
       <aside id="history-panel" class="history-panel hidden" aria-hidden="true">
         <div class="history-header">
-          <h2>系統記錄</h2>
+          <h2>系统记录</h2>
           <button id="close-history-btn" class="close-btn" type="button">返回</button>
         </div>
         <div class="history-list" id="history-list"></div>

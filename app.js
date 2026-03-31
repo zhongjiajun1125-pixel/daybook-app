@@ -1,3 +1,7 @@
+/**
+ * Trace - 认知显影系统 (Engineering v2.0)
+ */
+
 const DB_NAME = "TraceCognitionDB";
 const STORE_NAME = "entries";
 const DRAFT_KEY = "trace-draft-v1";
@@ -29,26 +33,14 @@ let state = {
   entries: [], 
   draft: localStorage.getItem(DRAFT_KEY) || "", 
   historyOpen: false,
-  editingId: null 
+  editingId: null,
+  isLoaded: false 
 };
 
 let implicitSession = { startMs: null, backspaceCount: 0 };
-
-// 黑洞模式：易失性記憶棧
-class BlackHoleStack {
-  constructor() { this.tempMemory = []; }
-  pour(noise) { if (noise) this.tempMemory.push(noise); }
-  swallow() {
-    for (let i = 0; i < this.tempMemory.length; i++) this.tempMemory[i] = "VOID";
-    this.tempMemory.length = 0;
-    this.tempMemory = [];
-  }
-}
-const voidStack = new BlackHoleStack();
-
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-// Zen Pulse：空靈脈衝音效 (方案 A)
+// Zen Pulse：空灵脉冲音效
 function playTraceFeedback() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const osc = audioCtx.createOscillator();
@@ -80,18 +72,18 @@ const db = {
     });
   },
   async getAll() {
+    if (!this.instance) return [];
+    const tx = this.instance.transaction(STORE_NAME, "readonly");
+    const request = tx.objectStore(STORE_NAME).getAll();
     return new Promise((resolve) => {
-      const tx = this.instance.transaction(STORE_NAME, "readonly");
-      const request = tx.objectStore(STORE_NAME).getAll();
       request.onsuccess = () => resolve(request.result.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
     });
   },
   async put(entry) {
-    return new Promise((resolve) => {
-      const tx = this.instance.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).put(entry);
-      tx.oncomplete = () => resolve();
-    });
+    if (!this.instance) return;
+    const tx = this.instance.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put(entry);
+    return new Promise((resolve) => { tx.oncomplete = () => resolve(); });
   }
 };
 
@@ -134,11 +126,16 @@ async function unlockWithBiometrics() {
 }
 
 async function bootSystem() {
-  await db.init();
-  state.entries = await db.getAll();
-  elements.rawMemoryInput.value = state.draft;
-  if (state.entries.length === 0) showView("onboarding");
-  else { showView("compose"); checkSystemEcho(); }
+  try {
+    await db.init();
+    state.entries = await db.getAll();
+    state.isLoaded = true;
+    elements.rawMemoryInput.value = state.draft;
+    if (!state.entries || state.entries.length === 0) showView("onboarding");
+    else { showView("compose"); checkSystemEcho(); }
+  } catch (err) {
+    elements.unlockBtn.textContent = "系统核心启动失败";
+  }
 }
 
 function init() {
@@ -151,18 +148,15 @@ function bindEvents() {
   elements.unlockBtn.addEventListener("click", async () => {
     const passed = await unlockWithBiometrics();
     if (passed) {
-      elements.unlockBtn.textContent = "已解構";
+      elements.unlockBtn.textContent = "解构成功";
       setTimeout(bootSystem, 400);
     } else {
-      elements.unlockBtn.textContent = "驗證中斷";
-      setTimeout(() => elements.unlockBtn.textContent = "觸碰以喚醒", 2000);
+      elements.unlockBtn.textContent = "验证中断";
+      setTimeout(() => elements.unlockBtn.textContent = "触碰以唤醒", 2000);
     }
   });
 
-  elements.enterWritingBtn.addEventListener("click", () => {
-    showView("compose");
-    elements.rawMemoryInput.focus();
-  });
+  elements.enterWritingBtn.addEventListener("click", () => { showView("compose"); elements.rawMemoryInput.focus(); });
 
   elements.rawMemoryInput.addEventListener("focus", () => {
     if (!implicitSession.startMs) implicitSession.startMs = Date.now();
@@ -188,7 +182,6 @@ function bindEvents() {
 
   elements.saveEntryBtn.addEventListener("click", submitEntry);
   elements.swallowBtn.addEventListener("click", triggerBlackHole);
-  
   elements.historyToggle.addEventListener("click", openHistory);
   elements.closeHistoryBtn.addEventListener("click", closeHistory);
   elements.exportBtn.addEventListener("click", exportData);
@@ -199,8 +192,6 @@ function bindEvents() {
 function triggerBlackHole() {
   const content = elements.rawMemoryInput.value.trim();
   if (!content) return;
-  voidStack.pour(content);
-  voidStack.swallow(); 
   playTraceFeedback();
   elements.rawMemoryInput.classList.add("ink-dissolve");
   document.body.classList.remove("focus-mode");
@@ -210,7 +201,7 @@ function triggerBlackHole() {
     state.draft = "";
     localStorage.removeItem(DRAFT_KEY);
     state.editingId = null;
-    elements.saveStatus.textContent = "已湮滅";
+    elements.saveStatus.textContent = "已湮灭";
     setTimeout(() => elements.saveStatus.textContent = "", 2000);
   }, 800);
 }
@@ -218,22 +209,16 @@ function triggerBlackHole() {
 async function submitEntry() {
   const content = elements.rawMemoryInput.value.trim();
   if (!content) return;
-
   const now = new Date();
   let entry;
 
   if (state.editingId) {
     const oldEntry = state.entries.find(e => e.id === state.editingId);
-    entry = {
-      ...oldEntry,
-      content,
-      lastModified: now.toISOString(),
-      context: { ...oldEntry.context, isEdited: true }
-    };
+    entry = { ...oldEntry, content, lastModified: now.toISOString(), context: { ...oldEntry.context, isEdited: true } };
     state.editingId = null;
   } else {
     const hour = now.getHours();
-    let timePhase = hour < 5 || hour >= 23 ? "深夜" : (hour < 10 ? "清晨" : "日間");
+    let timePhase = (hour < 5 || hour >= 23) ? "深夜" : (hour < 10 ? "清晨" : "日间");
     entry = {
       id: `mem-${now.getTime()}`,
       content,
@@ -242,8 +227,7 @@ async function submitEntry() {
         durationSec: Math.round((Date.now() - (implicitSession.startMs || Date.now())) / 1000), 
         friction: implicitSession.backspaceCount, 
         timePhase 
-      },
-      tags: {} 
+      }
     };
   }
 
@@ -261,51 +245,39 @@ async function submitEntry() {
     elements.rawMemoryInput.classList.remove("ink-dissolve");
     state.draft = "";
     localStorage.removeItem(DRAFT_KEY);
-    elements.saveStatus.textContent = "已封存";
+    elements.saveStatus.textContent = "认知已封存 ✓";
     setTimeout(() => elements.saveStatus.textContent = "", 2000);
-    silentAnalyze(entry);
     checkSystemEcho(); 
     implicitSession = { startMs: null, backspaceCount: 0 };
   }, 800); 
-}
-
-async function silentAnalyze(entry) {
-  entry.tags = {
-    emotion: detectEmotion(entry.content),
-    keywords: extractKeywords(entry.content)
-  };
-  await db.put(entry);
 }
 
 function checkSystemEcho() {
   const panel = elements.systemEchoPanel;
   panel.innerHTML = "";
   panel.classList.add("empty");
-  if (state.entries.length === 0) return;
-  const recentEntries = state.entries.slice(0, 15);
-  let echoText = "";
-  const highFrictionEntries = recentEntries.filter(e => e.context?.friction > 5);
-  const lateNightEntries = recentEntries.filter(e => e.context?.timePhase === "深夜");
+  if (!state.entries || state.entries.length === 0) return;
 
-  if (lateNightEntries.length >= 3) {
-    const nightKeywords = lateNightEntries.flatMap(e => e.tags.keywords || []);
-    const repeatedNight = findMostFrequent(nightKeywords);
-    echoText = repeatedNight ? `你關於「${repeatedNight}」的記錄，絕大多數發生在深夜。` : `你最近習慣在深夜系統性地吐露。`;
-  } else if (highFrictionEntries.length >= 3) {
-    echoText = `系統監測到，你在記錄最近幾個想法時，伴隨著高頻的刪改。`;
-  } else if (recentEntries.length >= 5) {
-    const allKeywords = recentEntries.flatMap(e => e.tags.keywords || []);
-    const repeated = findMostFrequent(allKeywords);
-    if (repeated && allKeywords.filter(k => k === repeated).length >= 3) {
-      echoText = `最近的系統切面裡，反覆出現了「${repeated}」。`;
-    }
+  const recentEntries = state.entries.slice(0, 10);
+  const contents = recentEntries.map(e => e.content);
+  let echoText = "";
+
+  const fatiguePatterns = ["累", "没劲", "疲", "卷"];
+  const anxietyPatterns = ["烦", "急", "乱", "压力"];
+
+  if (contents.filter(c => fatiguePatterns.some(p => c.includes(p))).length >= 3) {
+    echoText = "系统注意到，在最近的记录频率中，“疲惫感”正在以高频切面出现。";
+  } else if (contents.filter(c => anxietyPatterns.some(p => c.includes(p))).length >= 3) {
+    echoText = "当前的认知流中充斥着高信噪比的“焦虑回声”，建议暂时剥离外部输入。";
+  } else {
+    const lateNightEntries = recentEntries.filter(e => e.context?.timePhase === "深夜");
+    if (lateNightEntries.length >= 3) echoText = "你最近的深度输出集中发生在深夜，这是“自我结构”最易显影的时刻。";
   }
 
   if (echoText) {
     panel.classList.remove("empty");
     const p = document.createElement("p");
-    p.className = "echo-text";
-    p.textContent = echoText; 
+    p.className = "echo-text"; p.textContent = echoText; 
     panel.appendChild(p);
   }
 }
@@ -320,11 +292,11 @@ async function importData(e) {
       if (!Array.isArray(imported)) throw new Error();
       for (const entry of imported) await db.put(entry);
       state.entries = await db.getAll();
-      elements.saveStatus.textContent = "導入成功";
+      elements.saveStatus.textContent = "导入成功";
       setTimeout(() => elements.saveStatus.textContent = "", 2000);
       if (state.historyOpen) renderHistory();
     } catch (err) {
-      alert("導入失敗：無效的 Trace 文件。");
+      alert("导入失败：无效的 Trace 文件。");
     }
   };
   reader.readAsText(file);
@@ -343,10 +315,9 @@ function loadEntryForEdit(id) {
   const entry = state.entries.find(e => e.id === id);
   if (!entry) return;
   elements.rawMemoryInput.value = entry.content;
-  state.editingId = id;
-  state.draft = entry.content;
+  state.editingId = id; state.draft = entry.content;
   closeHistory();
-  elements.saveStatus.textContent = "正在修正記錄...";
+  elements.saveStatus.textContent = "正在修正记录...";
   elements.rawMemoryInput.focus();
 }
 
@@ -357,20 +328,17 @@ function showView(viewName) {
   elements.globalTools.classList.toggle("hidden", viewName === "onboarding" || viewName === "unlock");
 }
 
-function openHistory() {
-  state.historyOpen = true; elements.historyPanel.classList.remove("hidden");
-  elements.historyPanel.setAttribute("aria-hidden", "false"); renderHistory();
-}
-
-function closeHistory() {
-  state.historyOpen = false; elements.historyPanel.classList.add("hidden");
-  elements.historyPanel.setAttribute("aria-hidden", "true"); elements.rawMemoryInput.focus();
-}
+function openHistory() { state.historyOpen = true; elements.historyPanel.classList.remove("hidden"); renderHistory(); }
+function closeHistory() { state.historyOpen = false; elements.historyPanel.classList.add("hidden"); elements.rawMemoryInput.focus(); }
 
 function renderHistory() {
   elements.historyList.innerHTML = "";
-  if (state.entries.length === 0) {
-    elements.historyList.innerHTML = '<p style="text-align: center; margin-top: 40px; opacity: 0.5;">尚無記憶。</p>';
+  if (!state.isLoaded) {
+    elements.historyList.innerHTML = '<p style="text-align: center; margin-top: 40px; opacity: 0.5;">正在加载本地认知库...</p>';
+    return;
+  }
+  if (!state.entries || state.entries.length === 0) {
+    elements.historyList.innerHTML = '<p style="text-align: center; margin-top: 40px; opacity: 0.5;">尚无封存记录。</p>';
     return;
   }
   state.entries.forEach(entry => {
@@ -384,24 +352,7 @@ function renderHistory() {
   });
 }
 
-function findMostFrequent(arr) {
-  if (!arr || arr.length === 0) return null;
-  const counts = arr.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {});
-  return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-}
-
-function detectEmotion(text) {
-  const words = { "焦慮": ["慌", "壓力", "煩", "不安"], "疲憊": ["累", "困", "沒勁"], "積極": ["好", "開心", "運動"] };
-  for (let [emo, triggers] of Object.entries(words)) { if (triggers.some(t => text.includes(t))) return emo; }
-  return "平靜";
-}
-
-function extractKeywords(text) {
-  const pool = ["工作", "睡覺", "身體", "關係", "錢", "辭職", "健身"];
-  return pool.filter(w => text.includes(w));
-}
-
-init();
+window.addEventListener("load", init);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
