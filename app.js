@@ -1,923 +1,281 @@
-const STORAGE_KEY = "inknote-cognition-v3";
-const DRAFT_KEY = "inknote-cognition-draft-v3";
-const LANGUAGE_KEY = "inknote-language-v1";
-const THEME_KEY = "inknote-theme-v1";
-const LEGACY_STORAGE_KEYS = ["inknote-cognition-v2", "inknote-cognition-draft-v2"];
+const DB_NAME = "DaybookCognitionDB";
+const STORE_NAME = "entries";
+const DRAFT_KEY = "daybook-draft-v3";
 
 const elements = {
-  homeView: document.querySelector("#home-view"),
-  homeTitle: document.querySelector("#home-title"),
-  homeSubtitle: document.querySelector("#home-subtitle"),
-  homeBody: document.querySelector("#home-body"),
-  enterWritingButton: document.querySelector("#enter-writing-button"),
-  composeView: document.querySelector("#compose-view"),
-  loadingView: document.querySelector("#loading-view"),
-  feedbackView: document.querySelector("#feedback-view"),
-  returningCard: document.querySelector("#returning-card"),
-  returningKicker: document.querySelector("#returning-kicker"),
-  returningSummary: document.querySelector("#returning-summary"),
-  languageSelect: document.querySelector("#language-select"),
-  themeToggle: document.querySelector("#theme-toggle"),
-  surfaceToggle: document.querySelector("#surface-toggle"),
-  surfacePanel: document.querySelector("#surface-panel"),
-  reflectionAnchorCard: document.querySelector("#reflection-anchor-card"),
-  reflectionAnchorLabel: document.querySelector("#reflection-anchor-label"),
-  reflectionAnchorText: document.querySelector("#reflection-anchor-text"),
-  heroLine: document.querySelector("#hero-line"),
-  entryInput: document.querySelector("#entry-input"),
-  saveHint: document.querySelector("#save-hint"),
-  submitButton: document.querySelector("#submit-entry-button"),
-  backToWriteButton: document.querySelector("#back-to-write-button"),
-  loadingText: document.querySelector("#loading-text"),
-  feedbackEyebrow: document.querySelector("#feedback-eyebrow"),
-  feedbackSummary: document.querySelector("#feedback-summary"),
-  feedbackEmotion: document.querySelector("#feedback-emotion"),
-  feedbackKeywords: document.querySelector("#feedback-keywords"),
-  feedbackReflection: document.querySelector("#feedback-reflection"),
-  feedbackAnchor: document.querySelector("#feedback-anchor"),
-  insightCard: document.querySelector("#insight-card"),
-  streakText: document.querySelector("#streak-text"),
-  patternText: document.querySelector("#pattern-text"),
-  historyToggle: document.querySelector("#history-toggle"),
-  historyBackdrop: document.querySelector("#history-backdrop"),
-  historyPanel: document.querySelector("#history-panel"),
-  historyTitle: document.querySelector("#history-title"),
-  closeHistoryButton: document.querySelector("#close-history-button"),
-  historySearchInput: document.querySelector("#history-search-input"),
-  historyOverviewCard: document.querySelector("#history-overview-card"),
-  historyOverviewTitle: document.querySelector("#history-overview-title"),
-  historyOverviewBody: document.querySelector("#history-overview-body"),
-  historyList: document.querySelector("#history-list"),
-  floatingWriteButton: document.querySelector("#floating-write-button"),
-  historyGroupTemplate: document.querySelector("#history-item-template"),
-  historyEntryTemplate: document.querySelector("#history-entry-template"),
-  composeShell: document.querySelector(".compose-shell"),
-  composeFooter: document.querySelector("#compose-footer"),
+  globalTools: document.getElementById("global-tools"),
+  exportBtn: document.getElementById("export-data-btn"),
+  historyToggle: document.getElementById("history-toggle"),
+  onboardingView: document.getElementById("onboarding-view"),
+  enterWritingBtn: document.getElementById("enter-writing-btn"),
+  composeView: document.getElementById("compose-view"),
+  systemEchoPanel: document.getElementById("system-echo-panel"),
+  rawMemoryInput: document.getElementById("raw-memory-input"),
+  saveStatus: document.getElementById("save-status"),
+  saveEntryBtn: document.getElementById("save-entry-btn"),
+  historyPanel: document.getElementById("history-panel"),
+  historyList: document.getElementById("history-list"),
+  closeHistoryBtn: document.getElementById("close-history-btn"),
+  historyEntryTemplate: document.getElementById("history-entry-template")
 };
 
-const HERO_LINES = [
-  "把你的生活，变成可以被看懂的数据。",
-  "写下此刻，让模糊的感受慢慢显形。",
-  "留下一句话，给今天一个清晰的切面。",
-  "把没有说清的部分，安静地写出来。",
-  "记录不是堆积，它是慢慢看见自己。",
-];
+let state = { entries: [], draft: localStorage.getItem(DRAFT_KEY) || "", historyOpen: false };
+let implicitSession = { startMs: null, backspaceCount: 0 };
 
-const UI_COPY = {
-  "zh-CN": {
-    homeTitle: "慢下来，和自己说话。",
-    homeSubtitle: "你有多久，没有和自己说话了？",
-    homeBody: "不需要整理，也不需要先想清楚。先写下一句话，让今天留下一个切面。",
-    homeAction: "开始记录",
-    theme: "夜间",
-    themeAlt: "日间",
-    entryPlaceholder: "写下此刻。",
-    reflectionAnchor: "上一问",
-    saveEmpty: "自动保存草稿",
-    saveDraft: "草稿已自动保存",
-    saveIdle: "可以按 Cmd/Ctrl + Enter 提交",
-    submit: "完成",
-    loading: "正在理解这一条记录…",
-    feedback: "即时反馈",
-    continueWrite: "继续写",
-    history: "记录",
-    historyTitle: "历史记录",
-    closeHistory: "返回输入",
-    historySearch: "搜索记录、情绪、关键词",
-    noResults: "没有匹配的记录",
-    historyOverviewTitle: "最近的你",
-    started: "你已开始记录自己",
-    streak: (days) => `你已连续记录 ${days} 天`,
-    previous: (summary) => `上一次你写到：${summary}`,
-    insight: (days) => `已连续记录 ${days} 天`,
-    patternFallback: "继续记录，模式会慢慢出现。",
-    feedbackAnchor: "本工具用于帮助你识别和理解自己的行为模式。",
-    today: "今天",
-    yesterday: "昨天",
-    earlier: "更早",
+// --- Web Audio API: 物理触觉反馈引擎 ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playMuffledThud() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc.type = 'sine';
+  filter.type = 'lowpass';
+  filter.frequency.value = 60; 
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  const now = audioCtx.currentTime;
+  osc.frequency.setValueAtTime(120, now);
+  osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.4);
+  
+  gain.gain.setValueAtTime(0.7, now);
+  gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+  osc.start(now);
+  osc.stop(now + 0.4);
+}
+
+// --- 数据库引擎 (Local-First IndexedDB) ---
+const db = {
+  instance: null,
+  async init() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = (e) => {
+        const _db = e.target.result;
+        if (!_db.objectStoreNames.contains(STORE_NAME)) _db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      };
+      request.onsuccess = (e) => { this.instance = e.target.result; resolve(); };
+      request.onerror = (e) => reject(e);
+    });
   },
-  en: {
-    homeTitle: "Slow down, and talk to yourself.",
-    homeSubtitle: "How long has it been since you last listened to yourself?",
-    homeBody: "You do not need to organize it or fully understand it first. Start with one sentence.",
-    homeAction: "Start Writing",
-    theme: "Night",
-    themeAlt: "Day",
-    entryPlaceholder: "Write this moment.",
-    reflectionAnchor: "Last Question",
-    saveEmpty: "Draft autosaves",
-    saveDraft: "Draft saved",
-    saveIdle: "Press Cmd/Ctrl + Enter to submit",
-    submit: "Done",
-    loading: "Understanding this entry…",
-    feedback: "Instant Feedback",
-    continueWrite: "Keep Writing",
-    history: "History",
-    historyTitle: "History",
-    closeHistory: "Back to Write",
-    historySearch: "Search entries, emotions, keywords",
-    noResults: "No matching entries",
-    historyOverviewTitle: "Recent Pattern",
-    started: "You have started recording yourself",
-    streak: (days) => `You have recorded ${days} days in a row`,
-    previous: (summary) => `Last time you wrote: ${summary}`,
-    insight: (days) => `${days} day streak`,
-    patternFallback: "Keep writing. Patterns will appear.",
-    feedbackAnchor: "This tool helps you recognize and understand your behavior patterns.",
-    today: "Today",
-    yesterday: "Yesterday",
-    earlier: "Earlier",
+  async getAll() {
+    return new Promise((resolve) => {
+      const tx = this.instance.transaction(STORE_NAME, "readonly");
+      const request = tx.objectStore(STORE_NAME).getAll();
+      request.onsuccess = () => resolve(request.result.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+    });
   },
+  async put(entry) {
+    return new Promise((resolve) => {
+      const tx = this.instance.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put(entry);
+      tx.oncomplete = () => resolve();
+    });
+  }
 };
 
-const state = {
-  entries: sanitizeEntries(loadEntries()).sort(
-    (left, right) => new Date(right.updatedAt || right.createdAt) - new Date(left.updatedAt || left.createdAt),
-  ),
-  draft: loadDraft(),
-  language: loadLanguage(),
-  theme: loadTheme(),
-  currentView: "home",
-  currentFeedback: null,
-  historyOpen: false,
-  historyQuery: "",
-  idleHintTimer: null,
-  surfacePanelOpen: false,
-  selfCheck: { failures: [] },
-};
+// --- 环境渲染：时间节律光线 ---
+function setAmbientLight() {
+  const hour = new Date().getHours();
+  document.body.classList.remove('time-morning', 'time-day', 'time-night');
+  if (hour >= 5 && hour < 10) document.body.classList.add('time-morning');
+  else if (hour >= 10 && hour < 19) document.body.classList.add('time-day');
+  else document.body.classList.add('time-night');
+}
 
-initialize();
+async function bootstrap() {
+  setAmbientLight();
+  setInterval(setAmbientLight, 60000 * 30); 
 
-function initialize() {
-  clearLegacyStorage();
-  persistEntries();
-  elements.entryInput.value = state.draft;
-  elements.languageSelect.value = state.language;
-  applyTheme();
+  await db.init();
+  state.entries = await db.getAll();
+  elements.rawMemoryInput.value = state.draft;
   bindEvents();
-  syncStateFromHash();
-  renderHeroLine();
-  syncSaveHint();
-  render();
-  runSelfCheck("initialize");
-  requestAnimationFrame(() => {
-    elements.entryInput.focus();
-  });
+  
+  if (state.entries.length === 0) showView("onboarding");
+  else { showView("compose"); checkSystemEcho(); }
 }
 
 function bindEvents() {
-  elements.entryInput.addEventListener("input", () => {
-    state.draft = elements.entryInput.value;
-    persistDraft();
-    syncSaveHint();
-    scheduleIdleHint();
+  elements.enterWritingBtn.addEventListener("click", () => {
+    showView("compose");
+    elements.rawMemoryInput.focus();
   });
 
-  elements.entryInput.addEventListener("keydown", (event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-      event.preventDefault();
+  elements.rawMemoryInput.addEventListener("focus", () => {
+    if (!implicitSession.startMs) implicitSession.startMs = Date.now();
+    document.body.classList.add("focus-mode"); 
+  });
+  elements.rawMemoryInput.addEventListener("blur", () => {
+    document.body.classList.remove("focus-mode"); 
+  });
+
+  elements.rawMemoryInput.addEventListener("keydown", (e) => {
+    if (e.key === "Backspace" || e.key === "Delete") implicitSession.backspaceCount++;
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
       submitEntry();
     }
   });
 
-  elements.enterWritingButton.addEventListener("click", () => {
-    state.currentView = "compose";
-    render();
-    requestAnimationFrame(() => {
-      elements.entryInput.focus();
-    });
+  elements.rawMemoryInput.addEventListener("input", (e) => {
+    state.draft = e.target.value;
+    localStorage.setItem(DRAFT_KEY, state.draft);
   });
 
-  elements.surfaceToggle.addEventListener("click", () => {
-    state.surfacePanelOpen = !state.surfacePanelOpen;
-    render();
-  });
-
-  elements.submitButton.addEventListener("click", submitEntry);
-  elements.backToWriteButton.addEventListener("click", backToWrite);
-  elements.languageSelect.addEventListener("change", () => {
-    state.language = elements.languageSelect.value;
-    persistLanguage();
-    render();
-  });
-  elements.themeToggle.addEventListener("click", () => {
-    state.theme = state.theme === "dark" ? "light" : "dark";
-    persistTheme();
-    applyTheme();
-    render();
-  });
+  elements.saveEntryBtn.addEventListener("click", submitEntry);
   elements.historyToggle.addEventListener("click", openHistory);
-  elements.historyBackdrop.addEventListener("click", closeHistory);
-  elements.closeHistoryButton.addEventListener("click", closeHistory);
-  elements.floatingWriteButton.addEventListener("click", closeHistory);
-  elements.historySearchInput.addEventListener("input", () => {
-    state.historyQuery = elements.historySearchInput.value.trim().toLowerCase();
-    renderHistory();
-    runSelfCheck("history-search");
-  });
-
-  window.addEventListener("hashchange", () => {
-    syncStateFromHash();
-    render();
-    runSelfCheck("hashchange");
-  });
-
-  window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && state.historyOpen) {
-      closeHistory();
-    }
-  });
+  elements.closeHistoryBtn.addEventListener("click", closeHistory);
+  elements.exportBtn.addEventListener("click", exportData);
 }
 
-function render() {
-  renderLanguage();
-  renderHeroLine();
-  renderViews();
-  renderReturningHint();
-  renderInsights();
-  renderReflectionAnchor();
-  renderFeedback();
-  renderHistory();
-}
-
-function renderViews() {
-  elements.homeView.classList.toggle("hidden", state.currentView !== "home");
-  elements.composeView.classList.toggle("hidden", state.currentView !== "compose");
-  elements.loadingView.classList.toggle("hidden", state.currentView !== "loading");
-  elements.feedbackView.classList.toggle("hidden", state.currentView !== "feedback");
-  elements.historyBackdrop.classList.toggle("hidden", !state.historyOpen);
-  elements.historyPanel.classList.toggle("hidden", !state.historyOpen);
-  elements.historyPanel.setAttribute("aria-hidden", String(!state.historyOpen));
-  const showHome = state.currentView === "home";
-  elements.historyToggle.classList.toggle("chrome-hidden", showHome);
-  elements.languageSelect.closest(".language-switch").classList.toggle("chrome-hidden", showHome);
-  elements.surfacePanel.classList.toggle("hidden", state.currentView !== "compose" || !state.surfacePanelOpen);
-  elements.composeFooter.classList.toggle("hidden", state.currentView !== "compose");
-  elements.surfaceToggle.textContent = state.surfacePanelOpen ? "收起线索" : "显示线索";
-}
-
-function renderReturningHint() {
-  if (!elements.returningCard || !elements.returningKicker || !elements.returningSummary) return;
-
-  if (!state.entries.length) {
-    elements.returningCard.classList.add("hidden");
-    return;
-  }
-
-  const lastEntry = state.entries[0];
-  const streak = getStreakCount();
-  const label = state.entries.length === 1 ? t().started : t().streak(streak);
-
-  elements.returningCard.classList.remove("hidden");
-  elements.returningKicker.textContent = label;
-  elements.returningSummary.textContent = t().previous(lastEntry.feedback.summary);
-}
-
-function renderInsights() {
-  if (!elements.insightCard || !elements.streakText || !elements.patternText) return;
-
-  if (state.entries.length < 3) {
-    elements.insightCard.classList.add("hidden");
-    return;
-  }
-
-  elements.insightCard.classList.remove("hidden");
-  elements.streakText.textContent = t().insight(getStreakCount());
-  elements.patternText.textContent = getPatternHint();
-}
-
-function renderFeedback() {
-  if (!state.currentFeedback) return;
-
-  elements.feedbackSummary.textContent = state.currentFeedback.summary;
-  elements.feedbackReflection.textContent = state.currentFeedback.reflection;
-  elements.feedbackAnchor.textContent = t().feedbackAnchor;
-
-  elements.feedbackEmotion.innerHTML = "";
-  const emotionTag = document.createElement("span");
-  emotionTag.className = "emotion-tag";
-  emotionTag.textContent = state.currentFeedback.emotion;
-  elements.feedbackEmotion.appendChild(emotionTag);
-
-  elements.feedbackKeywords.innerHTML = "";
-  state.currentFeedback.keywords.forEach((keyword) => {
-    const tag = document.createElement("span");
-    tag.className = "keyword-tag";
-    tag.textContent = keyword;
-    elements.feedbackKeywords.appendChild(tag);
-  });
-}
-
-function renderReflectionAnchor() {
-  if (!state.currentFeedback?.reflection) {
-    elements.reflectionAnchorCard.classList.add("hidden");
-    return;
-  }
-
-  elements.reflectionAnchorCard.classList.remove("hidden");
-  elements.reflectionAnchorText.textContent = state.currentFeedback.reflection;
-}
-
-function renderHistory() {
-  if (!state.historyOpen) return;
-
-  const filtered = state.entries.filter((entry) => {
-    const haystack = [
-      entry.content,
-      entry.feedback.summary,
-      entry.feedback.emotion,
-      entry.feedback.keywords.join(" "),
-    ]
-      .join(" ")
-      .toLowerCase();
-    return !state.historyQuery || haystack.includes(state.historyQuery);
-  });
-
-  elements.historyList.innerHTML = "";
-  renderHistoryOverview(filtered);
-
-  if (!filtered.length) {
-    const empty = document.createElement("div");
-    empty.className = "feedback-card";
-    empty.textContent = t().noResults;
-    elements.historyList.appendChild(empty);
-    return;
-  }
-
-  groupHistoryEntries(filtered).forEach(([label, entries]) => {
-    const group = elements.historyGroupTemplate.content.firstElementChild.cloneNode(true);
-    group.querySelector(".history-group-label").textContent = label;
-    const itemsWrap = group.querySelector(".history-group-items");
-
-    entries.forEach((entry) => {
-      const node = elements.historyEntryTemplate.content.firstElementChild.cloneNode(true);
-      node.querySelector(".history-date").textContent = formatDate(entry.createdAt);
-      node.querySelector(".history-emotion").textContent = entry.feedback.emotion;
-      setHighlightedText(node.querySelector(".history-summary"), entry.feedback.summary, state.historyQuery);
-      setHighlightedText(node.querySelector(".history-preview"), entry.content, state.historyQuery);
-
-      const keywordWrap = node.querySelector(".history-keywords");
-      entry.feedback.keywords.forEach((keyword) => {
-        const tag = document.createElement("span");
-        tag.className = "keyword-tag";
-        if (state.historyQuery && keyword.toLowerCase().includes(state.historyQuery)) {
-          tag.innerHTML = highlightMatch(keyword, state.historyQuery);
-        } else {
-          tag.textContent = keyword;
-        }
-        keywordWrap.appendChild(tag);
-      });
-
-      node.addEventListener("click", () => {
-        openEntryForWriting(entry);
-      });
-
-      itemsWrap.appendChild(node);
-    });
-    elements.historyList.appendChild(group);
-  });
-}
-
-function renderHistoryOverview(entries) {
-  if (!entries.length) {
-    elements.historyOverviewCard.classList.add("hidden");
-    return;
-  }
-
-  const repeated = findRepeatedKeyword(entries.slice(0, 5));
-  const dominantEmotion = findDominantEmotion(entries.slice(0, 5));
-  const streak = getStreakCount();
-  const lines = [];
-
-  if (state.language === "en") {
-    if (dominantEmotion) lines.push(`Your recent tone leans toward ${dominantEmotion}.`);
-    if (repeated) lines.push(`You keep circling back to "${repeated}".`);
-    if (streak > 1) lines.push(`You have kept this conversation going for ${streak} days.`);
-  } else {
-    if (dominantEmotion) lines.push(`最近这几条里，你的底色更偏向${dominantEmotion}。`);
-    if (repeated) lines.push(`你最近反复绕回“${repeated}”。`);
-    if (streak > 1) lines.push(`这段对话你已经连续保留了 ${streak} 天。`);
-  }
-
-  if (!lines.length) {
-    lines.push(t().patternFallback);
-  }
-
-  elements.historyOverviewCard.classList.remove("hidden");
-  elements.historyOverviewTitle.textContent = t().historyOverviewTitle;
-  elements.historyOverviewBody.textContent = lines.join(" ");
-}
-
+// --- 核心动作：物理溶解提交流 ---
 async function submitEntry() {
-  const content = elements.entryInput.value.trim();
+  const content = elements.rawMemoryInput.value.trim();
   if (!content) return;
 
-  state.currentView = "loading";
-  render();
+  const durationSec = implicitSession.startMs ? Math.round((Date.now() - implicitSession.startMs) / 1000) : 0;
+  const friction = implicitSession.backspaceCount;
+  implicitSession = { startMs: null, backspaceCount: 0 }; 
 
-  await delay(700);
+  playMuffledThud();
+  elements.rawMemoryInput.classList.add("ink-dissolve");
+  document.body.classList.remove("focus-mode");
 
-  const now = new Date().toISOString();
-  const feedback = analyzeEntry(content, state.entries);
-  const duplicateEntry = findRecentDuplicateEntry(content);
+  const now = new Date();
+  const hour = now.getHours();
+  let timePhase = hour < 5 || hour >= 23 ? "深夜" : (hour < 10 ? "清晨" : "日间");
 
-  if (duplicateEntry) {
-    duplicateEntry.feedback = feedback;
-    duplicateEntry.updatedAt = now;
-  } else {
-    const entry = {
-      id: `entry-${crypto.randomUUID()}`,
-      content,
-      createdAt: now,
-      updatedAt: now,
-      feedback,
-    };
+  const entry = {
+    id: `mem-${now.getTime()}`,
+    content: content,
+    timestamp: now.toISOString(),
+    context: { durationSec, friction, timePhase },
+    tags: {} 
+  };
 
-    state.entries.unshift(entry);
-  }
+  await db.put(entry);
+  state.entries.unshift(entry);
 
-  sortEntries();
-  state.currentFeedback = feedback;
-  state.currentView = "feedback";
-  state.draft = "";
-  persistEntries();
-  persistDraft();
-  elements.entryInput.value = "";
-  syncSaveHint();
-  render();
-  runSelfCheck("submit");
+  setTimeout(() => {
+    elements.rawMemoryInput.value = "";
+    elements.rawMemoryInput.classList.remove("ink-dissolve");
+    state.draft = "";
+    localStorage.removeItem(DRAFT_KEY);
+    
+    elements.saveStatus.textContent = "已封存";
+    setTimeout(() => elements.saveStatus.textContent = "", 2000);
+
+    silentAnalyze(entry);
+    checkSystemEcho(); 
+  }, 800); 
 }
 
-function backToWrite() {
-  state.currentView = "compose";
-  render();
-  syncSaveHint();
-  requestAnimationFrame(() => {
-    elements.entryInput.focus();
-  });
+// --- 记忆架构引擎 ---
+async function silentAnalyze(entry) {
+  entry.tags = {
+    emotion: detectEmotion(entry.content),
+    keywords: extractKeywords(entry.content)
+  };
+  await db.put(entry);
+}
+
+function checkSystemEcho() {
+  const panel = elements.systemEchoPanel;
+  panel.innerHTML = "";
+  panel.classList.add("empty");
+
+  if (state.entries.length === 0) return;
+  const recentEntries = state.entries.slice(0, 15);
+  let echoText = "";
+
+  const highFrictionEntries = recentEntries.filter(e => e.context?.friction > 5);
+  const lateNightEntries = recentEntries.filter(e => e.context?.timePhase === "深夜");
+
+  if (lateNightEntries.length >= 3) {
+    const nightKeywords = lateNightEntries.flatMap(e => e.tags.keywords || []);
+    const repeatedNight = findMostFrequent(nightKeywords);
+    echoText = repeatedNight ? `你关于“${repeatedNight}”的记录，绝大多数发生在深夜。` : `你最近习惯在深夜系统性地吐露。`;
+  } else if (highFrictionEntries.length >= 3) {
+    echoText = `系统监测到，你在记录最近的几个想法时，伴随着高频的删改。`;
+  } else if (recentEntries.length >= 5) {
+    const allKeywords = recentEntries.flatMap(e => e.tags.keywords || []);
+    const repeated = findMostFrequent(allKeywords);
+    if (repeated && allKeywords.filter(k => k === repeated).length >= 3) {
+      echoText = `最近的系统切面里，反复出现了“${repeated}”。`;
+    }
+  }
+
+  if (echoText) {
+    panel.classList.remove("empty");
+    const p = document.createElement("p");
+    p.className = "echo-text";
+    p.textContent = echoText; 
+    panel.appendChild(p);
+  }
+}
+
+// --- 数据导出与视图 ---
+function exportData() {
+  const dataStr = JSON.stringify(state.entries, null, 2);
+  const blob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `Daybook-Export-${new Date().toISOString().split('T')[0]}.json`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function showView(viewName) {
+  elements.onboardingView.classList.toggle("hidden", viewName !== "onboarding");
+  elements.composeView.classList.toggle("hidden", viewName !== "compose");
+  elements.globalTools.classList.toggle("hidden", viewName === "onboarding");
 }
 
 function openHistory() {
-  state.historyOpen = true;
-  if (window.location.hash !== "#history") {
-    window.location.hash = "history";
-    return;
-  }
-  render();
-  runSelfCheck("open-history");
+  state.historyOpen = true; elements.historyPanel.classList.remove("hidden");
+  elements.historyPanel.setAttribute("aria-hidden", "false"); renderHistory();
 }
 
 function closeHistory() {
-  state.historyOpen = false;
-  if (window.location.hash === "#history") {
-    history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
-  }
-  render();
-  runSelfCheck("close-history");
-  requestAnimationFrame(() => {
-    elements.entryInput.focus();
+  state.historyOpen = false; elements.historyPanel.classList.add("hidden");
+  elements.historyPanel.setAttribute("aria-hidden", "true"); elements.rawMemoryInput.focus();
+}
+
+function renderHistory() {
+  elements.historyList.innerHTML = "";
+  state.entries.forEach(entry => {
+    const node = elements.historyEntryTemplate.content.firstElementChild.cloneNode(true);
+    const date = new Date(entry.timestamp);
+    node.querySelector(".history-time").textContent = `${date.getMonth()+1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    if (entry.context?.friction > 5) {
+      const frictionNode = node.querySelector(".history-friction");
+      frictionNode.textContent = "• 重度斟酌"; frictionNode.classList.remove("hidden");
+    }
+    node.querySelector(".history-raw-text").textContent = entry.content;
+    elements.historyList.appendChild(node);
   });
 }
 
-function syncStateFromHash() {
-  state.historyOpen = window.location.hash === "#history";
-}
-
-function openEntryForWriting(entry) {
-  state.draft = `${entry.content}\n`;
-  persistDraft();
-  elements.entryInput.value = state.draft;
-  state.currentFeedback = entry.feedback;
-  state.currentView = "compose";
-  syncSaveHint();
-  closeHistory();
-  requestAnimationFrame(() => {
-    elements.entryInput.selectionStart = elements.entryInput.value.length;
-    elements.entryInput.selectionEnd = elements.entryInput.value.length;
-    elements.entryInput.focus();
-  });
-}
-
-function analyzeEntry(content, previousEntries) {
-  const emotion = detectEmotion(content);
-  const keywords = extractKeywords(content);
-  const emotionalSignals = detectEmotionalSignals(content);
-  const repeated = findRepeatedKeyword(previousEntries);
-
-  return {
-    summary: buildSummary(content, emotion, keywords, emotionalSignals, repeated),
-    emotion,
-    keywords,
-    reflection: buildReflection(emotion, keywords, previousEntries, emotionalSignals, repeated),
-  };
+function findMostFrequent(arr) {
+  if (!arr || arr.length === 0) return null;
+  const counts = arr.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {});
+  return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
 }
 
 function detectEmotion(text) {
-  const signals = detectEmotionalSignals(text);
-  return signals[0]?.score > 0 ? signals[0].label : "平静";
+  const words = { "焦虑": ["慌", "压力", "烦", "不安"], "疲惫": ["累", "困", "没劲"], "积极": ["好", "开心", "运动"] };
+  for (let [emo, triggers] of Object.entries(words)) { if (triggers.some(t => text.includes(t))) return emo; }
+  return "平静";
 }
-
 function extractKeywords(text) {
-  const pool = [
-    "工作",
-    "睡眠",
-    "压力",
-    "关系",
-    "身体",
-    "拖延",
-    "时间",
-    "休息",
-    "家庭",
-    "效率",
-    "未来",
-    "生活",
-  ];
-
-  const found = pool.filter((item) => text.includes(item));
-  if (found.length >= 3) return found.slice(0, 3);
-
-  const parts = text
-    .replace(/[，。！？、,.!?;:\n]/g, " ")
-    .split(/\s+/)
-    .map((part) => part.trim())
-    .filter((part) => part.length >= 2 && part.length <= 6);
-
-  return [...new Set([...found, ...parts])].slice(0, 3).length
-    ? [...new Set([...found, ...parts])].slice(0, 3)
-    : ["今天", "感受", "自己"];
+  const pool = ["工作", "睡觉", "身体", "关系", "钱", "辞职", "健身"];
+  return pool.filter(w => text.includes(w));
 }
 
-function buildSummary(content, emotion, keywords, emotionalSignals, repeated) {
-  const topic = keywords.slice(0, 2).join("、");
-  const secondEmotion = emotionalSignals[1]?.score > 0 ? emotionalSignals[1].label : "";
-  const opening = pickLead(textTemperature(content), emotion);
-
-  if (emotion === "焦虑") {
-    return secondEmotion === "疲惫"
-      ? `${opening}你一边在扛着 ${topic || "眼前的事"}，一边已经有点被它耗住了。`
-      : `${opening}你这条记录里最明显的是不安，重心落在 ${topic || "当前的压力"}。`;
-  }
-  if (emotion === "疲惫") {
-    return secondEmotion === "焦虑"
-      ? `${opening}你不只是累，更像是在被 ${topic || "这件事"} 持续消耗。`
-      : `${opening}你现在更像是在承受消耗，重点落在 ${topic || "眼前的负担"}。`;
-  }
-  if (emotion === "专注") return `${opening}你在试着把自己重新收束回来，注意力正落在 ${topic || "手上的事情"}。`;
-  if (emotion === "开心") return `${opening}这条记录偏轻也偏亮，最明显的是 ${topic || "让你舒服的部分"}。`;
-  if (emotion === "难过") return `${opening}你写下来的不是表面的情绪，更像是被 ${topic || "这件事"} 压低了。`;
-  return repeated
-    ? `${opening}这条记录还是绕回了“${repeated}”，只是这次你写得更轻。`
-    : `${opening}你这条记录很克制，但真正重要的还是 ${topic || "当下的状态"}。`;
-}
-
-function buildReflection(emotion, keywords, previousEntries, emotionalSignals, repeated) {
-  const anchor = keywords[0] || "这件事";
-  const secondEmotion = emotionalSignals[1]?.score > 0 ? emotionalSignals[1].label : "";
-
-  if (emotion === "焦虑") {
-    return secondEmotion === "疲惫"
-      ? `你现在想摆脱的，到底是“${anchor}”，还是这种一直被它拖住的感觉？`
-      : `你担心的，真的是“${anchor}”本身，还是它背后的失控感？`;
-  }
-
-  if (emotion === "疲惫") {
-    return repeated
-      ? `你最近已经反复碰到“${repeated}”，这次的累更像身体问题，还是心里在抵抗？`
-      : `这种疲惫更像来自身体透支，还是你在抗拒“${anchor}”？`;
-  }
-
-  if (emotion === "专注") {
-    return `如果今天只保留一件最重要的事，你愿意把注意力继续放在“${anchor}”上吗？`;
-  }
-
-  if (emotion === "开心") {
-    return `这次让你舒服的部分，能不能被你主动留下，而不只是碰巧出现？`;
-  }
-
-  if (emotion === "难过") {
-    return `如果你不再把“${anchor}”说得那么轻，这里面最委屈的部分是什么？`;
-  }
-
-  return `如果把“${anchor}”说得再直接一点，你现在真正想面对的是什么？`;
-}
-
-function detectEmotionalSignals(text) {
-  return [
-    { label: "焦虑", words: ["焦虑", "不安", "压力", "担心", "慌", "害怕", "烦", "崩"] },
-    { label: "疲惫", words: ["累", "疲惫", "困", "没劲", "撑不住", "疲", "耗尽"] },
-    { label: "平静", words: ["平静", "安静", "慢", "舒服", "放松", "稳", "安定"] },
-    { label: "专注", words: ["专注", "清楚", "推进", "完成", "整理", "投入", "沉下"] },
-    { label: "开心", words: ["开心", "高兴", "轻松", "满足", "喜欢", "顺利", "值得"] },
-    { label: "难过", words: ["难过", "失落", "委屈", "低落", "空", "无力", "沮丧"] },
-  ]
-    .map((item) => ({
-      label: item.label,
-      score: item.words.reduce((sum, word) => sum + countOccurrences(text, word), 0),
-    }))
-    .sort((left, right) => right.score - left.score);
-}
-
-function textTemperature(text) {
-  if (/[!?！？]/.test(text)) return "sharp";
-  if (text.length >= 70) return "dense";
-  return "soft";
-}
-
-function pickLead(temperature, emotion) {
-  if (state.language === "en") {
-    if (temperature === "sharp") return "You wrote this with a visible edge. ";
-    if (temperature === "dense") return "There is a lot packed into this entry. ";
-    if (emotion === "平静") return "This one is quieter on the surface. ";
-    return "";
-  }
-
-  if (temperature === "sharp") return "你这次写得很急。";
-  if (temperature === "dense") return "这条里装了很多东西。";
-  if (emotion === "平静") return "表面上它是安静的。";
-  return "";
-}
-
-function findDominantEmotion(entries) {
-  const counts = new Map();
-  entries.forEach((entry) => {
-    counts.set(entry.feedback.emotion, (counts.get(entry.feedback.emotion) || 0) + 1);
-  });
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
-}
-
-function findRepeatedKeyword(entries) {
-  const keywords = entries.slice(0, 3).flatMap((entry) => entry.feedback.keywords);
-  const counts = new Map();
-  keywords.forEach((keyword) => {
-    counts.set(keyword, (counts.get(keyword) || 0) + 1);
-  });
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[1] >= 2
-    ? [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]
-    : "";
-}
-
-function getPatternHint() {
-  const repeated = findRepeatedKeyword(state.entries.slice(0, 5));
-  return repeated
-    ? state.language === "en"
-      ? `You mentioned "${repeated}" several times recently.`
-      : `你最近多次提到“${repeated}”。`
-    : t().patternFallback;
-}
-
-function getStreakCount() {
-  const days = [...new Set(state.entries.map((entry) => entry.createdAt.slice(0, 10)))].sort().reverse();
-  if (!days.length) return 0;
-
-  let streak = 1;
-  for (let index = 1; index < days.length; index += 1) {
-    const current = new Date(days[index - 1]);
-    const next = new Date(days[index]);
-    const diff = (current - next) / (1000 * 60 * 60 * 24);
-    if (diff === 1) streak += 1;
-    else break;
-  }
-  return streak;
-}
-
-function formatDate(isoString) {
-  return new Intl.DateTimeFormat(state.language, {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(isoString));
-}
-
-function countOccurrences(text, token) {
-  return text.split(token).length - 1;
-}
-
-function delay(ms) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function loadEntries() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistEntries() {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.entries));
-}
-
-function loadDraft() {
-  return window.localStorage.getItem(DRAFT_KEY) ?? "";
-}
-
-function persistDraft() {
-  window.localStorage.setItem(DRAFT_KEY, state.draft);
-}
-
-function syncSaveHint() {
-  elements.saveHint.textContent = state.draft.trim() ? t().saveDraft : t().saveEmpty;
-}
-
-function renderHeroLine() {
-  if (!elements.heroLine) return;
-  const index = state.entries.length % HERO_LINES.length;
-  elements.heroLine.textContent = HERO_LINES[index];
-}
-
-function renderLanguage() {
-  elements.homeTitle.textContent = t().homeTitle;
-  elements.homeSubtitle.textContent = t().homeSubtitle;
-  elements.homeBody.textContent = t().homeBody;
-  elements.enterWritingButton.textContent = t().homeAction;
-  elements.themeToggle.textContent = state.theme === "dark" ? t().themeAlt : t().theme;
-  elements.entryInput.placeholder = t().entryPlaceholder;
-  elements.reflectionAnchorLabel.textContent = t().reflectionAnchor;
-  elements.submitButton.textContent = t().submit;
-  elements.loadingText.textContent = t().loading;
-  elements.feedbackEyebrow.textContent = t().feedback;
-  elements.backToWriteButton.textContent = t().continueWrite;
-  elements.historyToggle.textContent = t().history;
-  elements.historyTitle.textContent = t().historyTitle;
-  elements.closeHistoryButton.textContent = t().closeHistory;
-  elements.historySearchInput.placeholder = t().historySearch;
-  syncSaveHint();
-}
-
-function groupHistoryEntries(entries) {
-  const groups = new Map();
-  entries.forEach((entry) => {
-    const label = getHistoryGroupLabel(entry.createdAt);
-    if (!groups.has(label)) groups.set(label, []);
-    groups.get(label).push(entry);
-  });
-  return [...groups.entries()];
-}
-
-function getHistoryGroupLabel(isoString) {
-  const target = new Date(isoString);
-  const today = new Date();
-  const targetDay = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
-  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const diffDays = Math.round((todayDay - targetDay) / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return t().today;
-  if (diffDays === 1) return t().yesterday;
-  return t().earlier;
-}
-
-function setHighlightedText(element, text, query) {
-  if (!query) {
-    element.textContent = text;
-    return;
-  }
-  element.innerHTML = highlightMatch(text, query);
-}
-
-function highlightMatch(text, query) {
-  const escapedQuery = escapeRegExp(query);
-  return text.replace(new RegExp(`(${escapedQuery})`, "gi"), "<mark>$1</mark>");
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function scheduleIdleHint() {
-  if (state.idleHintTimer) {
-    window.clearTimeout(state.idleHintTimer);
-  }
-
-  if (!state.draft.trim()) return;
-
-  state.idleHintTimer = window.setTimeout(() => {
-    if (state.currentView === "compose" && state.draft.trim()) {
-      elements.saveHint.textContent = t().saveIdle;
-    }
-  }, 1500);
-}
-
-function loadLanguage() {
-  return window.localStorage.getItem(LANGUAGE_KEY) || "zh-CN";
-}
-
-function persistLanguage() {
-  window.localStorage.setItem(LANGUAGE_KEY, state.language);
-}
-
-function loadTheme() {
-  return window.localStorage.getItem(THEME_KEY) || "light";
-}
-
-function persistTheme() {
-  window.localStorage.setItem(THEME_KEY, state.theme);
-}
-
-function applyTheme() {
-  document.body.classList.toggle("theme-dark", state.theme === "dark");
-}
-
-function t() {
-  return UI_COPY[state.language] || UI_COPY["zh-CN"];
-}
-
-function findRecentDuplicateEntry(content) {
-  const normalized = normalizeContent(content);
-  const latest = state.entries[0];
-  if (!latest) return null;
-
-  const sameContent = normalizeContent(latest.content) === normalized;
-  const createdAt = new Date(latest.updatedAt || latest.createdAt).getTime();
-  const withinTenMinutes = Date.now() - createdAt <= 10 * 60 * 1000;
-
-  return sameContent && withinTenMinutes ? latest : null;
-}
-
-function sortEntries() {
-  state.entries.sort((left, right) => {
-    const leftTime = new Date(left.updatedAt || left.createdAt).getTime();
-    const rightTime = new Date(right.updatedAt || right.createdAt).getTime();
-    return rightTime - leftTime;
-  });
-}
-
-function sanitizeEntries(entries) {
-  if (!Array.isArray(entries)) return [];
-
-  const sorted = [...entries].sort((left, right) => {
-    const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
-    const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
-    return rightTime - leftTime;
-  });
-
-  const kept = [];
-  sorted.forEach((entry) => {
-    if (!entry || typeof entry.content !== "string" || !entry.feedback) return;
-
-    const duplicate = kept.find((existing) => isAccidentalDuplicate(entry, existing));
-    if (duplicate) return;
-
-    kept.push({
-      ...entry,
-      updatedAt: entry.updatedAt || entry.createdAt,
-    });
-  });
-
-  return kept;
-}
-
-function isAccidentalDuplicate(left, right) {
-  const sameContent = normalizeContent(left.content) === normalizeContent(right.content);
-  const sameSummary = left.feedback?.summary === right.feedback?.summary;
-  const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
-  const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
-  const withinTenMinutes = Math.abs(leftTime - rightTime) <= 10 * 60 * 1000;
-  return sameContent && sameSummary && withinTenMinutes;
-}
-
-function normalizeContent(content) {
-  return content.replace(/\s+/g, " ").trim();
-}
-
-function clearLegacyStorage() {
-  LEGACY_STORAGE_KEYS.forEach((key) => {
-    window.localStorage.removeItem(key);
-  });
-}
-
-function runSelfCheck(context) {
-  const failures = [];
-
-  if (!elements.entryInput || !elements.submitButton) {
-    failures.push("记录创建路径不可用");
-  }
-
-  if (state.currentView === "feedback" && !state.currentFeedback) {
-    failures.push("AI 反馈页缺少反馈数据");
-  }
-
-  if (!elements.historyToggle || !elements.historyPanel) {
-    failures.push("历史入口或历史容器缺失");
-  }
-
-  if (state.historyOpen && state.entries.length > 0 && !elements.historyList.children.length) {
-    failures.push("历史页未加载任何记录");
-  }
-
-  state.selfCheck.failures = failures;
-  window.__inknoteHealth = {
-    context,
-    ok: failures.length === 0,
-    failures: [...failures],
-    entries: state.entries.length,
-    view: state.currentView,
-    historyOpen: state.historyOpen,
-  };
-
-  if (failures.length) {
-    console.error("[Inknote self-check failed]", context, failures);
-  }
-}
+bootstrap();
