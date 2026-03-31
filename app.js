@@ -2,11 +2,14 @@
 const DB_NAME = "TraceCognitionDB";
 const STORE_NAME = "entries";
 const DRAFT_KEY = "trace-draft-v1";
+const BIO_KEY = "trace-bio-enrolled";
 
 const elements = {
   globalTools: document.getElementById("global-tools"),
   exportBtn: document.getElementById("export-data-btn"),
   historyToggle: document.getElementById("history-toggle"),
+  unlockView: document.getElementById("unlock-view"),
+  unlockBtn: document.getElementById("unlock-btn"),
   onboardingView: document.getElementById("onboarding-view"),
   enterWritingBtn: document.getElementById("enter-writing-btn"),
   composeView: document.getElementById("compose-view"),
@@ -14,6 +17,7 @@ const elements = {
   rawMemoryInput: document.getElementById("raw-memory-input"),
   saveStatus: document.getElementById("save-status"),
   saveEntryBtn: document.getElementById("save-entry-btn"),
+  swallowBtn: document.getElementById("swallow-btn"),
   historyPanel: document.getElementById("history-panel"),
   historyList: document.getElementById("history-list"),
   closeHistoryBtn: document.getElementById("close-history-btn"),
@@ -23,24 +27,31 @@ const elements = {
 let state = { entries: [], draft: localStorage.getItem(DRAFT_KEY) || "", historyOpen: false };
 let implicitSession = { startMs: null, backspaceCount: 0 };
 
+// 黑洞模式：易失性内存栈
+class BlackHoleStack {
+  constructor() { this.tempMemory = []; }
+  pour(noise) { if (noise) this.tempMemory.push(noise); }
+  swallow() {
+    for (let i = 0; i < this.tempMemory.length; i++) this.tempMemory[i] = "VOID";
+    this.tempMemory.length = 0;
+    this.tempMemory = [];
+  }
+}
+const voidStack = new BlackHoleStack();
+
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playMuffledThud() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
-  
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-
   osc.type = 'triangle'; 
   osc.connect(gain);
   gain.connect(audioCtx.destination);
-
   const now = audioCtx.currentTime;
   osc.frequency.setValueAtTime(150, now);
   osc.frequency.exponentialRampToValueAtTime(40, now + 0.2);
-  
   gain.gain.setValueAtTime(0.3, now);
   gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-
   osc.start(now);
   osc.stop(now + 0.2);
 }
@@ -82,20 +93,69 @@ function setAmbientLight() {
   else document.body.classList.add('time-night');
 }
 
-async function bootstrap() {
-  setAmbientLight();
-  setInterval(setAmbientLight, 60000 * 30); 
+// 生物隐形锁核心逻辑
+async function unlockWithBiometrics() {
+  if (!window.PublicKeyCredential) return true; // 环境不支持则直通
+  
+  const isEnrolled = localStorage.getItem(BIO_KEY);
+  try {
+    if (!isEnrolled) {
+      // 首次录入设备特征
+      const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
+      const userId = new Uint8Array(16); window.crypto.getRandomValues(userId);
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: { name: "Trace System" },
+          user: { id: userId, name: "Trace", displayName: "Trace User" },
+          pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+          authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+          timeout: 60000
+        }
+      });
+      if (credential) localStorage.setItem(BIO_KEY, "true");
+      return !!credential;
+    } else {
+      // 日常唤醒验证
+      const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
+      const credential = await navigator.credentials.get({
+        publicKey: { challenge, userVerification: "required", timeout: 60000 }
+      });
+      return !!credential;
+    }
+  } catch (err) {
+    console.error("生物锁未通过", err);
+    return false;
+  }
+}
 
+async function bootSystem() {
   await db.init();
   state.entries = await db.getAll();
   elements.rawMemoryInput.value = state.draft;
-  bindEvents();
   
   if (state.entries.length === 0) showView("onboarding");
   else { showView("compose"); checkSystemEcho(); }
 }
 
+function init() {
+  setAmbientLight();
+  setInterval(setAmbientLight, 60000 * 30);
+  bindEvents();
+}
+
 function bindEvents() {
+  elements.unlockBtn.addEventListener("click", async () => {
+    const passed = await unlockWithBiometrics();
+    if (passed) {
+      elements.unlockBtn.textContent = "已解构";
+      setTimeout(bootSystem, 400);
+    } else {
+      elements.unlockBtn.textContent = "验证中断";
+      setTimeout(() => elements.unlockBtn.textContent = "触碰以唤醒", 2000);
+    }
+  });
+
   elements.enterWritingBtn.addEventListener("click", () => {
     showView("compose");
     elements.rawMemoryInput.focus();
@@ -123,9 +183,34 @@ function bindEvents() {
   });
 
   elements.saveEntryBtn.addEventListener("click", submitEntry);
+  elements.swallowBtn.addEventListener("click", triggerBlackHole);
+  
   elements.historyToggle.addEventListener("click", openHistory);
   elements.closeHistoryBtn.addEventListener("click", closeHistory);
   elements.exportBtn.addEventListener("click", exportData);
+}
+
+// 触发黑洞：彻底清空，不留痕迹
+function triggerBlackHole() {
+  const content = elements.rawMemoryInput.value.trim();
+  if (!content) return;
+
+  voidStack.pour(content);
+  voidStack.swallow(); // 内存粉碎
+  
+  playMuffledThud();
+  elements.rawMemoryInput.classList.add("ink-dissolve");
+  document.body.classList.remove("focus-mode");
+
+  setTimeout(() => {
+    elements.rawMemoryInput.value = "";
+    elements.rawMemoryInput.classList.remove("ink-dissolve");
+    state.draft = "";
+    localStorage.removeItem(DRAFT_KEY);
+    
+    elements.saveStatus.textContent = "已湮灭";
+    setTimeout(() => elements.saveStatus.textContent = "", 2000);
+  }, 800);
 }
 
 async function submitEntry() {
@@ -222,9 +307,10 @@ function exportData() {
 }
 
 function showView(viewName) {
+  elements.unlockView.classList.toggle("hidden", viewName !== "unlock");
   elements.onboardingView.classList.toggle("hidden", viewName !== "onboarding");
   elements.composeView.classList.toggle("hidden", viewName !== "compose");
-  elements.globalTools.classList.toggle("hidden", viewName === "onboarding");
+  elements.globalTools.classList.toggle("hidden", viewName === "onboarding" || viewName === "unlock");
 }
 
 function openHistory() {
@@ -274,7 +360,7 @@ function extractKeywords(text) {
   return pool.filter(w => text.includes(w));
 }
 
-bootstrap();
+init(); // 仅初始化事件和光线，等待用户触碰唤醒
 
 // 注册 Service Worker 让系统具备离线与安装能力
 if ('serviceWorker' in navigator) {
