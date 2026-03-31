@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Daybook</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <div>
+            <p class="section-kicker">日记本</p>
+            <h1>Daybook</h1>
+          </div>
+          <button id="create-note-button" class="icon-button strong" type="button" aria-label="新建日记">
+            ＋
+          </button>
+        </div>
+
+        <label class="search-box" for="search-input">
+          <input id="search-input" type="search" placeholder="搜索标题或内容" autocomplete="off" />
+        </label>
+
+        <div class="filter-row" id="view-filter">
+          <button class="filter-pill active" type="button" data-view="all">全部</button>
+          <button class="filter-pill" type="button" data-view="pinned">置顶</button>
+          <button class="filter-pill" type="button" data-view="journal">日记</button>
+        </div>
+
+        <div class="sidebar-meta">
+          <span id="note-count">0 篇</span>
+          <span id="today-label"></span>
+        </div>
+
+        <div class="note-list" id="note-list"></div>
+      </aside>
+
+      <section class="editor-shell">
+        <header class="editor-header">
+          <div>
+            <p class="section-kicker">今日记录</p>
+            <h2 id="editor-title-text">新的日记</h2>
+            <p class="editor-meta" id="editor-meta">自动保存</p>
+          </div>
+          <div class="header-actions">
+            <button id="pin-note-button" class="icon-button" type="button">置顶</button>
+            <button id="delete-note-button" class="icon-button danger" type="button">删除</button>
+          </div>
+        </header>
+
+        <section class="editor-card">
+          <div class="editor-top">
+            <input id="note-title" class="title-input" type="text" placeholder="标题" />
+            <div class="meta-grid">
+              <label class="compact-field">
+                <span>心情</span>
+                <select id="note-mood">
+                  <option value="">不设置</option>
+                  <option value="平静">平静</option>
+                  <option value="开心">开心</option>
+                  <option value="专注">专注</option>
+                  <option value="疲惫">疲惫</option>
+                  <option value="低落">低落</option>
+                </select>
+              </label>
+              <label class="compact-field">
+                <span>标签</span>
+                <input id="note-tags" type="text" placeholder="生活, 工作" />
+              </label>
+            </div>
+          </div>
+
+          <div class="quick-actions">
+            <button class="tool-button" type="button" data-insert="timestamp">插入时间</button>
+            <button class="tool-button" type="button" data-insert="checklist">待办清单</button>
+            <button class="tool-button" type="button" data-insert="divider">分隔线</button>
+          </div>
+
+          <textarea
+            id="note-content"
+            class="content-input"
+            placeholder="写下今天发生的事、想到的事，或者一个简单清单。"
+          ></textarea>
+
+          <footer class="editor-footer">
+            <span id="word-count">0 字</span>
+            <span id="created-at"></span>
+          </footer>
+        </section>
+      </section>
+    </main>
+
+    <template id="note-item-template">
+      <button class="note-item" type="button">
+        <div class="note-item-row">
+          <strong class="note-title"></strong>
+          <span class="note-pin"></span>
+        </div>
+        <p class="note-snippet"></p>
+        <div class="note-item-row">
+          <span class="note-date"></span>
+          <span class="note-mood"></span>
+        </div>
+      </button>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
