@@ -275,3 +275,16 @@ function extractKeywords(text) {
 }
 
 bootstrap();
+
+// 注册 Service Worker 让系统具备离线与安装能力
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(registration => {
+        console.log('Trace 物理容器已启动:', registration.scope);
+      })
+      .catch(error => {
+        console.log('容器启动失败:', error);
+      });
+  });
+}
