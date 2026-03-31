@@ -1,4 +1,3 @@
-// 核心修改：数据库名称和导出名称已全面更新为 Trace
 const DB_NAME = "TraceCognitionDB";
 const STORE_NAME = "entries";
 const DRAFT_KEY = "trace-draft-v1";
@@ -6,6 +5,8 @@ const BIO_KEY = "trace-bio-enrolled";
 
 const elements = {
   globalTools: document.getElementById("global-tools"),
+  importBtn: document.getElementById("import-data-btn"),
+  importInput: document.getElementById("import-file-input"),
   exportBtn: document.getElementById("export-data-btn"),
   historyToggle: document.getElementById("history-toggle"),
   unlockView: document.getElementById("unlock-view"),
@@ -24,10 +25,16 @@ const elements = {
   historyEntryTemplate: document.getElementById("history-entry-template")
 };
 
-let state = { entries: [], draft: localStorage.getItem(DRAFT_KEY) || "", historyOpen: false };
+let state = { 
+  entries: [], 
+  draft: localStorage.getItem(DRAFT_KEY) || "", 
+  historyOpen: false,
+  editingId: null 
+};
+
 let implicitSession = { startMs: null, backspaceCount: 0 };
 
-// 黑洞模式：易失性内存栈
+// 黑洞模式：易失性記憶棧
 class BlackHoleStack {
   constructor() { this.tempMemory = []; }
   pour(noise) { if (noise) this.tempMemory.push(noise); }
@@ -40,20 +47,23 @@ class BlackHoleStack {
 const voidStack = new BlackHoleStack();
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playMuffledThud() {
+
+// Zen Pulse：空靈脈衝音效 (方案 A)
+function playTraceFeedback() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-  osc.type = 'triangle'; 
+  osc.type = 'sine'; 
   osc.connect(gain);
   gain.connect(audioCtx.destination);
   const now = audioCtx.currentTime;
-  osc.frequency.setValueAtTime(150, now);
-  osc.frequency.exponentialRampToValueAtTime(40, now + 0.2);
-  gain.gain.setValueAtTime(0.3, now);
-  gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+  osc.frequency.setValueAtTime(440, now);
+  osc.frequency.exponentialRampToValueAtTime(220, now + 0.4);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.1, now + 0.02); 
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
   osc.start(now);
-  osc.stop(now + 0.2);
+  osc.stop(now + 0.6);
 }
 
 const db = {
@@ -93,15 +103,12 @@ function setAmbientLight() {
   else document.body.classList.add('time-night');
 }
 
-// 生物隐形锁核心逻辑
 async function unlockWithBiometrics() {
-  if (!window.PublicKeyCredential) return true; // 环境不支持则直通
-  
+  if (!window.PublicKeyCredential) return true;
   const isEnrolled = localStorage.getItem(BIO_KEY);
   try {
+    const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
     if (!isEnrolled) {
-      // 首次录入设备特征
-      const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
       const userId = new Uint8Array(16); window.crypto.getRandomValues(userId);
       const credential = await navigator.credentials.create({
         publicKey: {
@@ -116,15 +123,12 @@ async function unlockWithBiometrics() {
       if (credential) localStorage.setItem(BIO_KEY, "true");
       return !!credential;
     } else {
-      // 日常唤醒验证
-      const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
       const credential = await navigator.credentials.get({
         publicKey: { challenge, userVerification: "required", timeout: 60000 }
       });
       return !!credential;
     }
   } catch (err) {
-    console.error("生物锁未通过", err);
     return false;
   }
 }
@@ -133,7 +137,6 @@ async function bootSystem() {
   await db.init();
   state.entries = await db.getAll();
   elements.rawMemoryInput.value = state.draft;
-  
   if (state.entries.length === 0) showView("onboarding");
   else { showView("compose"); checkSystemEcho(); }
 }
@@ -148,11 +151,11 @@ function bindEvents() {
   elements.unlockBtn.addEventListener("click", async () => {
     const passed = await unlockWithBiometrics();
     if (passed) {
-      elements.unlockBtn.textContent = "已解构";
+      elements.unlockBtn.textContent = "已解構";
       setTimeout(bootSystem, 400);
     } else {
-      elements.unlockBtn.textContent = "验证中断";
-      setTimeout(() => elements.unlockBtn.textContent = "触碰以唤醒", 2000);
+      elements.unlockBtn.textContent = "驗證中斷";
+      setTimeout(() => elements.unlockBtn.textContent = "觸碰以喚醒", 2000);
     }
   });
 
@@ -165,6 +168,7 @@ function bindEvents() {
     if (!implicitSession.startMs) implicitSession.startMs = Date.now();
     document.body.classList.add("focus-mode"); 
   });
+  
   elements.rawMemoryInput.addEventListener("blur", () => {
     document.body.classList.remove("focus-mode"); 
   });
@@ -188,27 +192,25 @@ function bindEvents() {
   elements.historyToggle.addEventListener("click", openHistory);
   elements.closeHistoryBtn.addEventListener("click", closeHistory);
   elements.exportBtn.addEventListener("click", exportData);
+  elements.importBtn.addEventListener("click", () => elements.importInput.click());
+  elements.importInput.addEventListener("change", importData);
 }
 
-// 触发黑洞：彻底清空，不留痕迹
 function triggerBlackHole() {
   const content = elements.rawMemoryInput.value.trim();
   if (!content) return;
-
   voidStack.pour(content);
-  voidStack.swallow(); // 内存粉碎
-  
-  playMuffledThud();
+  voidStack.swallow(); 
+  playTraceFeedback();
   elements.rawMemoryInput.classList.add("ink-dissolve");
   document.body.classList.remove("focus-mode");
-
   setTimeout(() => {
     elements.rawMemoryInput.value = "";
     elements.rawMemoryInput.classList.remove("ink-dissolve");
     state.draft = "";
     localStorage.removeItem(DRAFT_KEY);
-    
-    elements.saveStatus.textContent = "已湮灭";
+    state.editingId = null;
+    elements.saveStatus.textContent = "已湮滅";
     setTimeout(() => elements.saveStatus.textContent = "", 2000);
   }, 800);
 }
@@ -217,40 +219,53 @@ async function submitEntry() {
   const content = elements.rawMemoryInput.value.trim();
   if (!content) return;
 
-  const durationSec = implicitSession.startMs ? Math.round((Date.now() - implicitSession.startMs) / 1000) : 0;
-  const friction = implicitSession.backspaceCount;
-  implicitSession = { startMs: null, backspaceCount: 0 }; 
+  const now = new Date();
+  let entry;
 
-  playMuffledThud();
+  if (state.editingId) {
+    const oldEntry = state.entries.find(e => e.id === state.editingId);
+    entry = {
+      ...oldEntry,
+      content,
+      lastModified: now.toISOString(),
+      context: { ...oldEntry.context, isEdited: true }
+    };
+    state.editingId = null;
+  } else {
+    const hour = now.getHours();
+    let timePhase = hour < 5 || hour >= 23 ? "深夜" : (hour < 10 ? "清晨" : "日間");
+    entry = {
+      id: `mem-${now.getTime()}`,
+      content,
+      timestamp: now.toISOString(),
+      context: { 
+        durationSec: Math.round((Date.now() - (implicitSession.startMs || Date.now())) / 1000), 
+        friction: implicitSession.backspaceCount, 
+        timePhase 
+      },
+      tags: {} 
+    };
+  }
+
+  playTraceFeedback();
   elements.rawMemoryInput.classList.add("ink-dissolve");
   document.body.classList.remove("focus-mode");
 
-  const now = new Date();
-  const hour = now.getHours();
-  let timePhase = hour < 5 || hour >= 23 ? "深夜" : (hour < 10 ? "清晨" : "日间");
-
-  const entry = {
-    id: `mem-${now.getTime()}`,
-    content: content,
-    timestamp: now.toISOString(),
-    context: { durationSec, friction, timePhase },
-    tags: {} 
-  };
-
   await db.put(entry);
-  state.entries.unshift(entry);
+  const index = state.entries.findIndex(e => e.id === entry.id);
+  if (index !== -1) state.entries[index] = entry;
+  else state.entries.unshift(entry);
 
   setTimeout(() => {
     elements.rawMemoryInput.value = "";
     elements.rawMemoryInput.classList.remove("ink-dissolve");
     state.draft = "";
     localStorage.removeItem(DRAFT_KEY);
-    
     elements.saveStatus.textContent = "已封存";
     setTimeout(() => elements.saveStatus.textContent = "", 2000);
-
     silentAnalyze(entry);
     checkSystemEcho(); 
+    implicitSession = { startMs: null, backspaceCount: 0 };
   }, 800); 
 }
 
@@ -266,25 +281,23 @@ function checkSystemEcho() {
   const panel = elements.systemEchoPanel;
   panel.innerHTML = "";
   panel.classList.add("empty");
-
   if (state.entries.length === 0) return;
   const recentEntries = state.entries.slice(0, 15);
   let echoText = "";
-
   const highFrictionEntries = recentEntries.filter(e => e.context?.friction > 5);
   const lateNightEntries = recentEntries.filter(e => e.context?.timePhase === "深夜");
 
   if (lateNightEntries.length >= 3) {
     const nightKeywords = lateNightEntries.flatMap(e => e.tags.keywords || []);
     const repeatedNight = findMostFrequent(nightKeywords);
-    echoText = repeatedNight ? `你关于“${repeatedNight}”的记录，绝大多数发生在深夜。` : `你最近习惯在深夜系统性地吐露。`;
+    echoText = repeatedNight ? `你關於「${repeatedNight}」的記錄，絕大多數發生在深夜。` : `你最近習慣在深夜系統性地吐露。`;
   } else if (highFrictionEntries.length >= 3) {
-    echoText = `系统监测到，你在记录最近的几个想法时，伴随着高频的删改。`;
+    echoText = `系統監測到，你在記錄最近幾個想法時，伴隨著高頻的刪改。`;
   } else if (recentEntries.length >= 5) {
     const allKeywords = recentEntries.flatMap(e => e.tags.keywords || []);
     const repeated = findMostFrequent(allKeywords);
     if (repeated && allKeywords.filter(k => k === repeated).length >= 3) {
-      echoText = `最近的系统切面里，反复出现了“${repeated}”。`;
+      echoText = `最近的系統切面裡，反覆出現了「${repeated}」。`;
     }
   }
 
@@ -297,6 +310,26 @@ function checkSystemEcho() {
   }
 }
 
+async function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const imported = JSON.parse(event.target.result);
+      if (!Array.isArray(imported)) throw new Error();
+      for (const entry of imported) await db.put(entry);
+      state.entries = await db.getAll();
+      elements.saveStatus.textContent = "導入成功";
+      setTimeout(() => elements.saveStatus.textContent = "", 2000);
+      if (state.historyOpen) renderHistory();
+    } catch (err) {
+      alert("導入失敗：無效的 Trace 文件。");
+    }
+  };
+  reader.readAsText(file);
+}
+
 function exportData() {
   const dataStr = JSON.stringify(state.entries, null, 2);
   const blob = new Blob([dataStr], { type: "application/json" });
@@ -304,6 +337,17 @@ function exportData() {
   const a = document.createElement("a");
   a.href = url; a.download = `Trace-Export-${new Date().toISOString().split('T')[0]}.json`;
   a.click(); URL.revokeObjectURL(url);
+}
+
+function loadEntryForEdit(id) {
+  const entry = state.entries.find(e => e.id === id);
+  if (!entry) return;
+  elements.rawMemoryInput.value = entry.content;
+  state.editingId = id;
+  state.draft = entry.content;
+  closeHistory();
+  elements.saveStatus.textContent = "正在修正記錄...";
+  elements.rawMemoryInput.focus();
 }
 
 function showView(viewName) {
@@ -325,21 +369,17 @@ function closeHistory() {
 
 function renderHistory() {
   elements.historyList.innerHTML = "";
-  
   if (state.entries.length === 0) {
-    elements.historyList.innerHTML = '<p style="color: var(--text-ghost); font-size: 0.9rem; text-align: center; margin-top: 40px;">系统暂无封存的记忆。</p>';
+    elements.historyList.innerHTML = '<p style="text-align: center; margin-top: 40px; opacity: 0.5;">尚無記憶。</p>';
     return;
   }
-
   state.entries.forEach(entry => {
     const node = elements.historyEntryTemplate.content.firstElementChild.cloneNode(true);
     const date = new Date(entry.timestamp);
-    node.querySelector(".history-time").textContent = `${date.getMonth()+1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-    if (entry.context?.friction > 5) {
-      const frictionNode = node.querySelector(".history-friction");
-      frictionNode.textContent = "• 重度斟酌"; frictionNode.classList.remove("hidden");
-    }
+    node.querySelector(".history-time").textContent = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
     node.querySelector(".history-raw-text").textContent = entry.content;
+    node.style.cursor = "pointer";
+    node.addEventListener("click", () => loadEntryForEdit(entry.id));
     elements.historyList.appendChild(node);
   });
 }
@@ -351,26 +391,20 @@ function findMostFrequent(arr) {
 }
 
 function detectEmotion(text) {
-  const words = { "焦虑": ["慌", "压力", "烦", "不安"], "疲惫": ["累", "困", "没劲"], "积极": ["好", "开心", "运动"] };
+  const words = { "焦慮": ["慌", "壓力", "煩", "不安"], "疲憊": ["累", "困", "沒勁"], "積極": ["好", "開心", "運動"] };
   for (let [emo, triggers] of Object.entries(words)) { if (triggers.some(t => text.includes(t))) return emo; }
-  return "平静";
+  return "平靜";
 }
+
 function extractKeywords(text) {
-  const pool = ["工作", "睡觉", "身体", "关系", "钱", "辞职", "健身"];
+  const pool = ["工作", "睡覺", "身體", "關係", "錢", "辭職", "健身"];
   return pool.filter(w => text.includes(w));
 }
 
-init(); // 仅初始化事件和光线，等待用户触碰唤醒
+init();
 
-// 注册 Service Worker 让系统具备离线与安装能力
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(registration => {
-        console.log('Trace 物理容器已启动:', registration.scope);
-      })
-      .catch(error => {
-        console.log('容器启动失败:', error);
-      });
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
   });
 }
