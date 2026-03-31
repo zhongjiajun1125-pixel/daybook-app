@@ -8,14 +8,26 @@
   </head>
   <body>
     <main class="app-shell">
+      <label class="language-switch" aria-label="语言选择">
+        <select id="language-select">
+          <option value="zh-CN">中文</option>
+          <option value="en">EN</option>
+        </select>
+      </label>
       <button id="history-toggle" class="history-toggle" type="button" aria-label="查看历史">
         记录
       </button>
+      <button
+        id="history-backdrop"
+        class="history-backdrop hidden"
+        type="button"
+        aria-label="关闭历史记录"
+      ></button>
 
       <section class="compose-view" id="compose-view">
         <div class="compose-shell">
           <div class="hero-copy">
-            <p class="hero-line">把你的生活，变成可以被看懂的数据。</p>
+            <p id="hero-line" class="hero-line">把你的生活，变成可以被看懂的数据。</p>
           </div>
 
           <article id="returning-card" class="context-card hidden" aria-live="polite">
@@ -35,6 +47,11 @@
             autofocus
           ></textarea>
 
+          <article id="reflection-anchor-card" class="reflection-anchor-card hidden" aria-live="polite">
+            <p id="reflection-anchor-label" class="card-label">上一问</p>
+            <p id="reflection-anchor-text" class="reflection-anchor-text"></p>
+          </article>
+
           <div class="compose-footer">
             <span id="save-hint">自动保存草稿</span>
             <button id="submit-entry-button" class="submit-button" type="button">完成</button>
@@ -45,14 +62,14 @@
       <section class="loading-view hidden" id="loading-view">
         <div class="loading-shell">
           <span class="loading-dot"></span>
-          <p>正在理解这一条记录…</p>
+          <p id="loading-text">正在理解这一条记录…</p>
         </div>
       </section>
 
       <section class="feedback-view hidden" id="feedback-view">
         <div class="feedback-shell">
           <div class="feedback-header">
-            <p class="eyebrow">即时反馈</p>
+            <p id="feedback-eyebrow" class="eyebrow">即时反馈</p>
             <button id="back-to-write-button" class="back-button" type="button">继续写</button>
           </div>
 
@@ -87,7 +104,7 @@
         <div class="history-header">
           <div>
             <p class="eyebrow">Timeline</p>
-            <h2>历史记录</h2>
+            <h2 id="history-title">历史记录</h2>
           </div>
           <button id="close-history-button" class="history-close" type="button">返回输入</button>
         </div>
@@ -98,31 +115,25 @@
 
         <div class="history-list" id="history-list"></div>
 
-        <article id="history-detail-card" class="history-detail-card hidden" aria-live="polite">
-          <div class="history-detail-head">
-            <div>
-              <p id="history-detail-date" class="eyebrow"></p>
-              <h3 id="history-detail-emotion"></h3>
-            </div>
-          </div>
-
-          <p id="history-detail-summary" class="history-detail-summary"></p>
-          <div id="history-detail-keywords" class="history-keywords"></div>
-          <p id="history-detail-content" class="history-detail-content"></p>
-          <p id="history-detail-reflection" class="history-detail-reflection"></p>
-        </article>
-
         <button id="floating-write-button" class="floating-write-button" type="button">+</button>
       </aside>
     </main>
 
     <template id="history-item-template">
+      <section class="history-group">
+        <p class="history-group-label"></p>
+        <div class="history-group-items"></div>
+      </section>
+    </template>
+
+    <template id="history-entry-template">
       <button class="history-item" type="button">
         <div class="history-top">
           <span class="history-date"></span>
           <span class="history-emotion"></span>
         </div>
         <p class="history-summary"></p>
+        <p class="history-preview"></p>
         <div class="history-keywords"></div>
       </button>
     </template>

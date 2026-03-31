@@ -40,6 +40,24 @@ input {
   padding: 24px;
 }
 
+.language-switch {
+  position: fixed;
+  top: 20px;
+  right: 74px;
+  z-index: 5;
+}
+
+.language-switch select {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(216, 223, 233, 0.92);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #8f99a8;
+  outline: none;
+  backdrop-filter: blur(16px);
+}
+
 .history-toggle {
   position: fixed;
   top: 20px;
@@ -56,6 +74,15 @@ input {
   border-radius: 999px;
   letter-spacing: 0.06em;
   backdrop-filter: blur(16px);
+}
+
+.history-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  border: 0;
+  background: transparent;
+  cursor: default;
 }
 
 .compose-view,
@@ -116,6 +143,20 @@ input {
   color: #3e4756;
   line-height: 1.65;
   font-size: 0.94rem;
+}
+
+.reflection-anchor-card {
+  padding: 14px 16px;
+  border: 1px solid rgba(220, 226, 235, 0.88);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(22px);
+}
+
+.reflection-anchor-text {
+  margin: 8px 0 0;
+  color: #465061;
+  line-height: 1.68;
 }
 
 .entry-input {
@@ -303,8 +344,27 @@ input {
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
   margin-top: 16px;
+}
+
+.history-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-group-label {
+  margin: 0;
+  color: #7a8392;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.history-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .history-item {
@@ -317,10 +377,11 @@ input {
 
 .history-preview {
   margin: 10px 0 0;
-  color: var(--text);
-  line-height: 1.65;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 0.92rem;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -331,39 +392,11 @@ input {
   line-height: 1.65;
 }
 
-.history-detail-card {
-  margin-top: 16px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: var(--shadow);
-}
-
-.history-detail-head h3 {
-  margin: 4px 0 0;
-  font-size: 1.1rem;
-  letter-spacing: -0.02em;
-}
-
-.history-detail-summary,
-.history-detail-reflection,
-.history-detail-content {
-  margin: 14px 0 0;
-  line-height: 1.72;
-}
-
-.history-detail-summary {
-  color: #314053;
-}
-
-.history-detail-content {
-  white-space: pre-wrap;
-  color: var(--text);
-}
-
-.history-detail-reflection {
-  color: #5b6678;
+mark {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: rgba(216, 235, 245, 0.88);
+  color: inherit;
 }
 
 .floating-write-button {
@@ -417,6 +450,10 @@ input {
 @media (max-width: 760px) {
   .app-shell {
     padding: 18px 14px 32px;
+  }
+
+  .language-switch {
+    right: 68px;
   }
 
   .entry-input {
