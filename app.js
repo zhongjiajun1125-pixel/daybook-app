@@ -1,6 +1,7 @@
-const DB_NAME = "DaybookCognitionDB";
+// 核心修改：数据库名称和导出名称已全面更新为 Trace
+const DB_NAME = "TraceCognitionDB";
 const STORE_NAME = "entries";
-const DRAFT_KEY = "daybook-draft-v3";
+const DRAFT_KEY = "trace-draft-v1";
 
 const elements = {
   globalTools: document.getElementById("global-tools"),
@@ -22,35 +23,28 @@ const elements = {
 let state = { entries: [], draft: localStorage.getItem(DRAFT_KEY) || "", historyOpen: false };
 let implicitSession = { startMs: null, backspaceCount: 0 };
 
-// --- Web Audio API: 物理触觉反馈引擎 ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playMuffledThud() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
   
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-  const filter = audioCtx.createBiquadFilter();
 
-  osc.type = 'sine';
-  filter.type = 'lowpass';
-  filter.frequency.value = 60; 
-
-  osc.connect(filter);
-  filter.connect(gain);
+  osc.type = 'triangle'; 
+  osc.connect(gain);
   gain.connect(audioCtx.destination);
 
   const now = audioCtx.currentTime;
-  osc.frequency.setValueAtTime(120, now);
-  osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.4);
+  osc.frequency.setValueAtTime(150, now);
+  osc.frequency.exponentialRampToValueAtTime(40, now + 0.2);
   
-  gain.gain.setValueAtTime(0.7, now);
-  gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+  gain.gain.setValueAtTime(0.3, now);
+  gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
 
   osc.start(now);
-  osc.stop(now + 0.4);
+  osc.stop(now + 0.2);
 }
 
-// --- 数据库引擎 (Local-First IndexedDB) ---
 const db = {
   instance: null,
   async init() {
@@ -80,7 +74,6 @@ const db = {
   }
 };
 
-// --- 环境渲染：时间节律光线 ---
 function setAmbientLight() {
   const hour = new Date().getHours();
   document.body.classList.remove('time-morning', 'time-day', 'time-night');
@@ -135,7 +128,6 @@ function bindEvents() {
   elements.exportBtn.addEventListener("click", exportData);
 }
 
-// --- 核心动作：物理溶解提交流 ---
 async function submitEntry() {
   const content = elements.rawMemoryInput.value.trim();
   if (!content) return;
@@ -177,7 +169,6 @@ async function submitEntry() {
   }, 800); 
 }
 
-// --- 记忆架构引擎 ---
 async function silentAnalyze(entry) {
   entry.tags = {
     emotion: detectEmotion(entry.content),
@@ -221,13 +212,12 @@ function checkSystemEcho() {
   }
 }
 
-// --- 数据导出与视图 ---
 function exportData() {
   const dataStr = JSON.stringify(state.entries, null, 2);
   const blob = new Blob([dataStr], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `Daybook-Export-${new Date().toISOString().split('T')[0]}.json`;
+  a.href = url; a.download = `Trace-Export-${new Date().toISOString().split('T')[0]}.json`;
   a.click(); URL.revokeObjectURL(url);
 }
 
@@ -249,6 +239,12 @@ function closeHistory() {
 
 function renderHistory() {
   elements.historyList.innerHTML = "";
+  
+  if (state.entries.length === 0) {
+    elements.historyList.innerHTML = '<p style="color: var(--text-ghost); font-size: 0.9rem; text-align: center; margin-top: 40px;">系统暂无封存的记忆。</p>';
+    return;
+  }
+
   state.entries.forEach(entry => {
     const node = elements.historyEntryTemplate.content.firstElementChild.cloneNode(true);
     const date = new Date(entry.timestamp);

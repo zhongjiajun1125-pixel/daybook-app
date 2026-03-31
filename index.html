@@ -2,29 +2,36 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Daybook - 认知显影系统</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1b1e" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)">
+    
+    <title>Trace - 认知显影系统</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="time-day">
     <nav id="global-tools" class="hidden">
-      <button id="export-data-btn" class="ghost-btn" type="button" aria-label="导出数据">Export</button>
-      <button id="history-toggle" class="ghost-btn" type="button" aria-label="时间线">Timeline</button>
+      <button id="export-data-btn" class="ghost-btn" type="button" aria-label="导出数据">导出</button>
+      <button id="history-toggle" class="ghost-btn" type="button" aria-label="时间线">历史</button>
     </nav>
 
     <main id="app-root" class="app-shell">
       
       <section id="onboarding-view" class="view-section active">
         <div class="narrative-shell">
-          <p>这里是你的记录空间。</p>
+          <p>这里是 Trace。</p>
+          <p>一个不对你做任何评价的认知显影系统。</p>
           <br>
-          <p>不需要整理，不需要写得完整，也不需要想清楚。</p>
-          <p>你只需要开始记录一件正在发生的事，或者一个正在出现的想法。</p>
-          <p>甚至一句话，一个词，都可以被保存。</p>
+          <p>不需要整理，也不需要写得完整。</p>
+          <p>你只需要丢下一件正在发生的事，或一个闪现的想法。</p>
+          <p>哪怕只有几个字。</p>
           <br>
-          <p>这个系统不会评价你写了什么，只负责记住。</p>
+          <p>它只负责吞咽和保存。</p>
+          <p>并在未来的某一天，向你折射出潜意识的真实轨迹。</p>
           <br>
-          <p>当你准备好了，开始第一条记录。</p>
+          <p>当你准备好了，留下第一道印迹。</p>
         </div>
         <div class="action-shell">
           <button id="enter-writing-btn" class="primary-action-btn" type="button">→ 开始记录</button>
@@ -64,7 +71,8 @@
       <article class="history-item">
         <div class="history-meta">
           <time class="history-time"></time>
-          <span class="history-friction hidden"></span> </div>
+          <span class="history-friction hidden"></span>
+        </div>
         <p class="history-raw-text"></p>
       </article>
     </template>
