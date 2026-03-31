@@ -14,6 +14,9 @@
           <option value="en">EN</option>
         </select>
       </label>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换夜间模式">
+        夜间
+      </button>
       <button id="history-toggle" class="history-toggle" type="button" aria-label="查看历史">
         记录
       </button>
@@ -24,56 +27,58 @@
         aria-label="关闭历史记录"
       ></button>
 
+      <section id="home-view" class="home-view">
+        <div class="home-shell">
+          <p class="home-eyebrow">Daybook</p>
+          <h1 id="home-title" class="home-title">慢下来，和自己说话。</h1>
+          <p id="home-subtitle" class="home-subtitle">你有多久，没有和自己说话了？</p>
+          <p id="home-body" class="home-body">
+            不需要整理，也不需要先想清楚。先写下一句话，让今天留下一个切面。
+          </p>
+          <button id="enter-writing-button" class="home-button" type="button">开始记录</button>
+        </div>
+      </section>
+
       <section class="compose-view" id="compose-view">
         <div class="compose-shell">
-          <article id="empty-state-card" class="empty-state-card hidden" aria-live="polite">
-            <p id="empty-state-title" class="empty-state-title">这里是你的记录空间。</p>
-            <p id="empty-state-body" class="empty-state-body">
-              不需要整理，不需要写得完整，也不需要先想清楚。
-            </p>
-            <p id="empty-state-body-2" class="empty-state-body">
-              你只需要写下正在发生的一件事，或者刚刚出现的一个念头。
-            </p>
-            <p id="empty-state-body-3" class="empty-state-body">
-              一句话，一个词，甚至一段没有说完的表达，都可以被留下。
-            </p>
-            <p id="empty-state-body-4" class="empty-state-body">
-              这个系统不会评价你写了什么。它只负责记住。
-            </p>
-            <button id="start-writing-button" class="submit-button empty-state-button" type="button">
-              开始记录
-            </button>
-          </article>
+          <button id="surface-toggle" class="surface-toggle" type="button">显示线索</button>
 
-          <div class="hero-copy">
-            <p id="hero-line" class="hero-line">把你的生活，变成可以被看懂的数据。</p>
+          <div id="surface-panel" class="surface-panel hidden">
+            <div class="hero-copy">
+              <p id="hero-line" class="hero-line">把你的生活，变成可以被看懂的数据。</p>
+            </div>
+
+            <article id="returning-card" class="context-card hidden" aria-live="polite">
+              <p id="returning-kicker" class="context-kicker"></p>
+              <p id="returning-summary" class="context-text"></p>
+            </article>
+
+            <article id="insight-card" class="context-card hidden" aria-live="polite">
+              <p id="streak-text" class="context-kicker"></p>
+              <p id="pattern-text" class="context-text"></p>
+            </article>
           </div>
 
-          <article id="returning-card" class="context-card hidden" aria-live="polite">
-            <p id="returning-kicker" class="context-kicker"></p>
-            <p id="returning-summary" class="context-text"></p>
+          <article class="writing-card">
+            <textarea
+              id="entry-input"
+              class="entry-input"
+              placeholder="写下此刻。"
+              autofocus
+            ></textarea>
+
+            <article id="reflection-anchor-card" class="reflection-anchor-card hidden" aria-live="polite">
+              <p id="reflection-anchor-label" class="card-label">上一问</p>
+              <p id="reflection-anchor-text" class="reflection-anchor-text"></p>
+            </article>
           </article>
 
-          <article id="insight-card" class="context-card hidden" aria-live="polite">
-            <p id="streak-text" class="context-kicker"></p>
-            <p id="pattern-text" class="context-text"></p>
-          </article>
-
-          <textarea
-            id="entry-input"
-            class="entry-input"
-            placeholder="写下此刻。"
-            autofocus
-          ></textarea>
-
-          <article id="reflection-anchor-card" class="reflection-anchor-card hidden" aria-live="polite">
-            <p id="reflection-anchor-label" class="card-label">上一问</p>
-            <p id="reflection-anchor-text" class="reflection-anchor-text"></p>
-          </article>
-
-          <div class="compose-footer">
+          <div id="compose-footer" class="compose-footer hidden">
             <span id="save-hint">自动保存草稿</span>
-            <button id="submit-entry-button" class="submit-button" type="button">完成</button>
+            <div class="compose-actions">
+              <span class="submit-shortcut">⌘/Ctrl + Enter</span>
+              <button id="submit-entry-button" class="submit-button subtle-submit-button" type="button">完成</button>
+            </div>
           </div>
         </div>
       </section>

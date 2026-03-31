@@ -9,6 +9,17 @@
   --shadow: 0 24px 80px rgba(112, 128, 148, 0.12);
 }
 
+body.theme-dark {
+  --bg: #111317;
+  --panel: rgba(28, 31, 36, 0.82);
+  --panel-strong: rgba(36, 40, 46, 0.9);
+  --line: rgba(69, 76, 87, 0.9);
+  --text: #eef2f7;
+  --muted: #a4adbb;
+  --soft: #7d8796;
+  --shadow: 0 28px 90px rgba(0, 0, 0, 0.28);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -28,6 +39,12 @@ body {
   letter-spacing: -0.01em;
 }
 
+body.theme-dark {
+  background:
+    radial-gradient(circle at top right, rgba(74, 95, 122, 0.18), transparent 28%),
+    linear-gradient(180deg, #0f1115 0%, #171b21 100%);
+}
+
 button,
 textarea,
 input {
@@ -43,7 +60,7 @@ input {
 .language-switch {
   position: fixed;
   top: 20px;
-  right: 74px;
+  right: 128px;
   z-index: 5;
 }
 
@@ -76,6 +93,22 @@ input {
   backdrop-filter: blur(16px);
 }
 
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 74px;
+  z-index: 5;
+  min-width: 46px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(216, 223, 233, 0.92);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #8f99a8;
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+}
+
 .history-backdrop {
   position: fixed;
   inset: 0;
@@ -91,6 +124,7 @@ input {
 }
 
 .compose-view,
+.home-view,
 .loading-view,
 .feedback-view {
   display: flex;
@@ -99,6 +133,7 @@ input {
   min-height: calc(100vh - 48px);
 }
 
+.home-shell,
 .compose-shell,
 .loading-shell,
 .feedback-shell {
@@ -106,52 +141,84 @@ input {
   animation: fade-in-up 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.compose-shell {
+.home-shell {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 16px;
-  padding-bottom: 20px;
+  padding: 28px 0;
 }
 
-.compose-shell.empty-mode {
-  justify-content: center;
-  min-height: calc(100vh - 72px);
+.home-eyebrow {
+  margin: 0;
+  color: #8a93a2;
+  font-size: 12px;
+  letter-spacing: 0.14em;
 }
 
-.empty-state-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 36rem;
-  padding: 8px 0 18px;
-}
-
-.empty-state-title,
-.empty-state-body {
+.home-title,
+.home-subtitle,
+.home-body {
   margin: 0;
 }
 
-.empty-state-title {
-  font-size: clamp(1.5rem, 2.8vw, 2rem);
-  letter-spacing: -0.04em;
+.home-title {
+  max-width: 10ch;
+  font-size: clamp(2.4rem, 6vw, 4.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.08em;
   color: var(--text);
 }
 
-.empty-state-body {
-  max-width: 34ch;
-  color: #536072;
-  line-height: 1.78;
+.home-subtitle {
+  color: #5a6474;
+  font-size: clamp(1rem, 1.8vw, 1.2rem);
 }
 
-.empty-state-button {
-  width: fit-content;
-  margin-top: 8px;
+.home-body {
+  max-width: 30ch;
+  color: #6d7686;
+  line-height: 1.76;
+  font-size: 1rem;
+}
+
+.home-button {
+  min-height: 46px;
+  padding: 0 18px;
+  border: 1px solid rgba(216, 223, 233, 0.92);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.compose-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 20px;
+}
+
+.surface-toggle {
+  align-self: flex-end;
+  border: 0;
+  background: transparent;
+  color: #9aa3b1;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.surface-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .hero-copy {
   display: flex;
   align-items: center;
   min-height: 24px;
+  padding-left: 4px;
 }
 
 .hero-line {
@@ -194,6 +261,92 @@ input {
   backdrop-filter: blur(22px);
 }
 
+.writing-card {
+  padding: 26px 22px 22px;
+  border: 1px solid rgba(230, 234, 241, 0.96);
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 28px 90px rgba(112, 128, 148, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+
+body.theme-dark .writing-card,
+body.theme-dark .feedback-card,
+body.theme-dark .history-overview-card,
+body.theme-dark .history-item,
+body.theme-dark .context-card,
+body.theme-dark .reflection-anchor-card {
+  background: rgba(28, 31, 36, 0.88);
+  border-color: rgba(69, 76, 87, 0.9);
+  box-shadow: var(--shadow);
+}
+
+body.theme-dark .writing-card {
+  background: rgba(24, 27, 32, 0.98);
+}
+
+body.theme-dark .home-button,
+body.theme-dark .submit-button,
+body.theme-dark .back-button,
+body.theme-dark .history-close,
+body.theme-dark .language-switch select,
+body.theme-dark .theme-toggle,
+body.theme-dark .history-toggle,
+body.theme-dark .floating-write-button {
+  background: rgba(36, 40, 46, 0.9);
+  color: var(--text);
+  border-color: rgba(69, 76, 87, 0.9);
+}
+
+body.theme-dark .home-subtitle,
+body.theme-dark .home-body,
+body.theme-dark .hero-line,
+body.theme-dark .context-text,
+body.theme-dark .reflection-anchor-text,
+body.theme-dark .submit-shortcut {
+  color: #bcc5d2;
+}
+
+body.theme-dark .empty-state-body,
+body.theme-dark .history-group-label,
+body.theme-dark .history-preview,
+body.theme-dark .context-kicker,
+body.theme-dark #save-hint,
+body.theme-dark .history-date,
+body.theme-dark .history-emotion,
+body.theme-dark .card-label,
+body.theme-dark .eyebrow,
+body.theme-dark .system-anchor-text {
+  color: #96a0af;
+}
+
+body.theme-dark .entry-input::placeholder {
+  color: #6f7887;
+}
+
+body.theme-dark .compose-footer {
+  background: linear-gradient(180deg, rgba(17, 19, 23, 0), rgba(17, 19, 23, 0.9) 28%, rgba(17, 19, 23, 0.96));
+}
+
+body.theme-dark .history-header {
+  background: linear-gradient(180deg, rgba(23, 27, 33, 0.96), rgba(23, 27, 33, 0.82));
+}
+
+body.theme-dark .history-search {
+  background: rgba(23, 27, 33, 0.74);
+}
+
+body.theme-dark .history-search input {
+  background: rgba(30, 34, 40, 0.92);
+  border-color: rgba(69, 76, 87, 0.9);
+  color: var(--text);
+}
+
+body.theme-dark mark {
+  background: rgba(84, 109, 138, 0.62);
+}
+
 .reflection-anchor-text {
   margin: 8px 0 0;
   color: #465061;
@@ -202,8 +355,8 @@ input {
 
 .entry-input {
   width: 100%;
-  min-height: 52vh;
-  padding: 0 6px;
+  min-height: 64vh;
+  padding: 0 2px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -234,6 +387,22 @@ input {
   padding-bottom: 6px;
   background: linear-gradient(180deg, rgba(247, 248, 251, 0), rgba(247, 248, 251, 0.9) 28%, rgba(247, 248, 251, 0.96));
   backdrop-filter: blur(12px);
+}
+
+.compose-footer.hidden,
+.surface-panel.hidden {
+  display: none;
+}
+
+.compose-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.submit-shortcut {
+  color: #8c95a3;
+  font-size: 12px;
 }
 
 #save-hint,
@@ -268,6 +437,11 @@ input {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.88);
   color: var(--text);
+}
+
+.subtle-submit-button {
+  background: rgba(246, 249, 252, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
 .submit-button:hover,
@@ -523,13 +697,19 @@ mark {
 
   .language-switch {
     top: calc(14px + env(safe-area-inset-top));
-    right: 66px;
+    right: 122px;
   }
 
   .language-switch select,
-  .history-toggle {
+  .history-toggle,
+  .theme-toggle {
     min-height: 34px;
     font-size: 12px;
+  }
+
+  .theme-toggle {
+    top: calc(14px + env(safe-area-inset-top));
+    right: 66px;
   }
 
   .history-toggle {
@@ -537,6 +717,7 @@ mark {
   }
 
   .compose-view,
+  .home-view,
   .loading-view,
   .feedback-view {
     align-items: flex-start;
@@ -544,22 +725,28 @@ mark {
     padding-top: 54px;
   }
 
+  .home-shell,
   .compose-shell,
   .feedback-shell,
   .loading-shell {
     width: 100%;
   }
 
-  .empty-state-card {
-    padding-top: 28px;
+  .home-shell {
+    gap: 14px;
+    padding-top: 32px;
   }
 
-  .empty-state-button {
+  .home-title {
+    max-width: 8ch;
+  }
+
+  .home-button {
     width: 100%;
   }
 
   .entry-input {
-    min-height: 58vh;
+    min-height: 66vh;
     font-size: 1.16rem;
     line-height: 1.88;
   }
@@ -580,11 +767,25 @@ mark {
     gap: 10px;
   }
 
+  .writing-card {
+    padding: 22px 16px 18px;
+    border-radius: 28px;
+  }
+
+  .compose-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .submit-button,
   .back-button,
   .history-close {
     width: 100%;
     justify-content: center;
+  }
+
+  .submit-shortcut {
+    display: none;
   }
 
   .history-panel {

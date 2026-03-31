@@ -1,23 +1,25 @@
 const STORAGE_KEY = "inknote-cognition-v3";
 const DRAFT_KEY = "inknote-cognition-draft-v3";
 const LANGUAGE_KEY = "inknote-language-v1";
+const THEME_KEY = "inknote-theme-v1";
 const LEGACY_STORAGE_KEYS = ["inknote-cognition-v2", "inknote-cognition-draft-v2"];
 
 const elements = {
+  homeView: document.querySelector("#home-view"),
+  homeTitle: document.querySelector("#home-title"),
+  homeSubtitle: document.querySelector("#home-subtitle"),
+  homeBody: document.querySelector("#home-body"),
+  enterWritingButton: document.querySelector("#enter-writing-button"),
   composeView: document.querySelector("#compose-view"),
   loadingView: document.querySelector("#loading-view"),
   feedbackView: document.querySelector("#feedback-view"),
   returningCard: document.querySelector("#returning-card"),
   returningKicker: document.querySelector("#returning-kicker"),
   returningSummary: document.querySelector("#returning-summary"),
-  emptyStateCard: document.querySelector("#empty-state-card"),
-  emptyStateTitle: document.querySelector("#empty-state-title"),
-  emptyStateBody: document.querySelector("#empty-state-body"),
-  emptyStateBody2: document.querySelector("#empty-state-body-2"),
-  emptyStateBody3: document.querySelector("#empty-state-body-3"),
-  emptyStateBody4: document.querySelector("#empty-state-body-4"),
-  startWritingButton: document.querySelector("#start-writing-button"),
   languageSelect: document.querySelector("#language-select"),
+  themeToggle: document.querySelector("#theme-toggle"),
+  surfaceToggle: document.querySelector("#surface-toggle"),
+  surfacePanel: document.querySelector("#surface-panel"),
   reflectionAnchorCard: document.querySelector("#reflection-anchor-card"),
   reflectionAnchorLabel: document.querySelector("#reflection-anchor-label"),
   reflectionAnchorText: document.querySelector("#reflection-anchor-text"),
@@ -50,6 +52,7 @@ const elements = {
   historyGroupTemplate: document.querySelector("#history-item-template"),
   historyEntryTemplate: document.querySelector("#history-entry-template"),
   composeShell: document.querySelector(".compose-shell"),
+  composeFooter: document.querySelector("#compose-footer"),
 };
 
 const HERO_LINES = [
@@ -62,12 +65,12 @@ const HERO_LINES = [
 
 const UI_COPY = {
   "zh-CN": {
-    emptyTitle: "这里是你的记录空间。",
-    emptyBody1: "不需要整理，不需要写完整，也不需要先想清楚。",
-    emptyBody2: "你只需要写下正在发生的一件事，或者刚刚出现的一个念头。",
-    emptyBody3: "一句话，一个词，甚至一段没有说完的表达，都可以被留下。",
-    emptyBody4: "这个系统不会评价你写了什么。它只负责记住。",
-    emptyAction: "开始记录",
+    homeTitle: "慢下来，和自己说话。",
+    homeSubtitle: "你有多久，没有和自己说话了？",
+    homeBody: "不需要整理，也不需要先想清楚。先写下一句话，让今天留下一个切面。",
+    homeAction: "开始记录",
+    theme: "夜间",
+    themeAlt: "日间",
     entryPlaceholder: "写下此刻。",
     reflectionAnchor: "上一问",
     saveEmpty: "自动保存草稿",
@@ -94,12 +97,12 @@ const UI_COPY = {
     earlier: "更早",
   },
   en: {
-    emptyTitle: "This is your recording space.",
-    emptyBody1: "You do not need to organize it, finish it, or fully understand it first.",
-    emptyBody2: "You only need to write one thing that is happening, or one thought that just appeared.",
-    emptyBody3: "A sentence, a word, even an unfinished fragment can be kept.",
-    emptyBody4: "This system does not judge what you write. It only remembers.",
-    emptyAction: "Start Writing",
+    homeTitle: "Slow down, and talk to yourself.",
+    homeSubtitle: "How long has it been since you last listened to yourself?",
+    homeBody: "You do not need to organize it or fully understand it first. Start with one sentence.",
+    homeAction: "Start Writing",
+    theme: "Night",
+    themeAlt: "Day",
     entryPlaceholder: "Write this moment.",
     reflectionAnchor: "Last Question",
     saveEmpty: "Draft autosaves",
@@ -133,12 +136,13 @@ const state = {
   ),
   draft: loadDraft(),
   language: loadLanguage(),
-  currentView: "compose",
+  theme: loadTheme(),
+  currentView: "home",
   currentFeedback: null,
   historyOpen: false,
   historyQuery: "",
   idleHintTimer: null,
-  introDismissed: false,
+  surfacePanelOpen: false,
   selfCheck: { failures: [] },
 };
 
@@ -149,6 +153,7 @@ function initialize() {
   persistEntries();
   elements.entryInput.value = state.draft;
   elements.languageSelect.value = state.language;
+  applyTheme();
   bindEvents();
   syncStateFromHash();
   renderHeroLine();
@@ -163,7 +168,6 @@ function initialize() {
 function bindEvents() {
   elements.entryInput.addEventListener("input", () => {
     state.draft = elements.entryInput.value;
-    if (state.draft.trim()) state.introDismissed = true;
     persistDraft();
     syncSaveHint();
     scheduleIdleHint();
@@ -176,12 +180,17 @@ function bindEvents() {
     }
   });
 
-  elements.startWritingButton.addEventListener("click", () => {
-    state.introDismissed = true;
+  elements.enterWritingButton.addEventListener("click", () => {
+    state.currentView = "compose";
     render();
     requestAnimationFrame(() => {
       elements.entryInput.focus();
     });
+  });
+
+  elements.surfaceToggle.addEventListener("click", () => {
+    state.surfacePanelOpen = !state.surfacePanelOpen;
+    render();
   });
 
   elements.submitButton.addEventListener("click", submitEntry);
@@ -189,6 +198,12 @@ function bindEvents() {
   elements.languageSelect.addEventListener("change", () => {
     state.language = elements.languageSelect.value;
     persistLanguage();
+    render();
+  });
+  elements.themeToggle.addEventListener("click", () => {
+    state.theme = state.theme === "dark" ? "light" : "dark";
+    persistTheme();
+    applyTheme();
     render();
   });
   elements.historyToggle.addEventListener("click", openHistory);
@@ -218,7 +233,6 @@ function render() {
   renderLanguage();
   renderHeroLine();
   renderViews();
-  renderEmptyState();
   renderReturningHint();
   renderInsights();
   renderReflectionAnchor();
@@ -227,23 +241,19 @@ function render() {
 }
 
 function renderViews() {
+  elements.homeView.classList.toggle("hidden", state.currentView !== "home");
   elements.composeView.classList.toggle("hidden", state.currentView !== "compose");
   elements.loadingView.classList.toggle("hidden", state.currentView !== "loading");
   elements.feedbackView.classList.toggle("hidden", state.currentView !== "feedback");
   elements.historyBackdrop.classList.toggle("hidden", !state.historyOpen);
   elements.historyPanel.classList.toggle("hidden", !state.historyOpen);
   elements.historyPanel.setAttribute("aria-hidden", String(!state.historyOpen));
-}
-
-function renderEmptyState() {
-  const showEmpty = !state.entries.length && !state.draft.trim() && !state.introDismissed;
-
-  elements.emptyStateCard.classList.toggle("hidden", !showEmpty);
-  elements.entryInput.classList.toggle("hidden", showEmpty);
-  elements.reflectionAnchorCard.classList.toggle("hidden", showEmpty || !state.currentFeedback?.reflection);
-  elements.composeShell.classList.toggle("empty-mode", showEmpty);
-  elements.historyToggle.classList.toggle("chrome-hidden", showEmpty);
-  elements.languageSelect.closest(".language-switch").classList.toggle("chrome-hidden", showEmpty);
+  const showHome = state.currentView === "home";
+  elements.historyToggle.classList.toggle("chrome-hidden", showHome);
+  elements.languageSelect.closest(".language-switch").classList.toggle("chrome-hidden", showHome);
+  elements.surfacePanel.classList.toggle("hidden", state.currentView !== "compose" || !state.surfacePanelOpen);
+  elements.composeFooter.classList.toggle("hidden", state.currentView !== "compose");
+  elements.surfaceToggle.textContent = state.surfacePanelOpen ? "收起线索" : "显示线索";
 }
 
 function renderReturningHint() {
@@ -440,7 +450,6 @@ async function submitEntry() {
 
 function backToWrite() {
   state.currentView = "compose";
-  state.introDismissed = true;
   render();
   syncSaveHint();
   requestAnimationFrame(() => {
@@ -476,7 +485,6 @@ function syncStateFromHash() {
 
 function openEntryForWriting(entry) {
   state.draft = `${entry.content}\n`;
-  state.introDismissed = true;
   persistDraft();
   elements.entryInput.value = state.draft;
   state.currentFeedback = entry.feedback;
@@ -721,12 +729,11 @@ function renderHeroLine() {
 }
 
 function renderLanguage() {
-  elements.emptyStateTitle.textContent = t().emptyTitle;
-  elements.emptyStateBody.textContent = t().emptyBody1;
-  elements.emptyStateBody2.textContent = t().emptyBody2;
-  elements.emptyStateBody3.textContent = t().emptyBody3;
-  elements.emptyStateBody4.textContent = t().emptyBody4;
-  elements.startWritingButton.textContent = t().emptyAction;
+  elements.homeTitle.textContent = t().homeTitle;
+  elements.homeSubtitle.textContent = t().homeSubtitle;
+  elements.homeBody.textContent = t().homeBody;
+  elements.enterWritingButton.textContent = t().homeAction;
+  elements.themeToggle.textContent = state.theme === "dark" ? t().themeAlt : t().theme;
   elements.entryInput.placeholder = t().entryPlaceholder;
   elements.reflectionAnchorLabel.textContent = t().reflectionAnchor;
   elements.submitButton.textContent = t().submit;
@@ -799,6 +806,18 @@ function loadLanguage() {
 
 function persistLanguage() {
   window.localStorage.setItem(LANGUAGE_KEY, state.language);
+}
+
+function loadTheme() {
+  return window.localStorage.getItem(THEME_KEY) || "light";
+}
+
+function persistTheme() {
+  window.localStorage.setItem(THEME_KEY, state.theme);
+}
+
+function applyTheme() {
+  document.body.classList.toggle("theme-dark", state.theme === "dark");
 }
 
 function t() {
