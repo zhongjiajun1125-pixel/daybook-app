@@ -35,6 +35,9 @@ const elements = {
   historyTitle: document.querySelector("#history-title"),
   closeHistoryButton: document.querySelector("#close-history-button"),
   historySearchInput: document.querySelector("#history-search-input"),
+  historyOverviewCard: document.querySelector("#history-overview-card"),
+  historyOverviewTitle: document.querySelector("#history-overview-title"),
+  historyOverviewBody: document.querySelector("#history-overview-body"),
   historyList: document.querySelector("#history-list"),
   floatingWriteButton: document.querySelector("#floating-write-button"),
   historyGroupTemplate: document.querySelector("#history-item-template"),
@@ -65,6 +68,7 @@ const UI_COPY = {
     closeHistory: "返回输入",
     historySearch: "搜索记录、情绪、关键词",
     noResults: "没有匹配的记录",
+    historyOverviewTitle: "最近的你",
     started: "你已开始记录自己",
     streak: (days) => `你已连续记录 ${days} 天`,
     previous: (summary) => `上一次你写到：${summary}`,
@@ -90,6 +94,7 @@ const UI_COPY = {
     closeHistory: "Back to Write",
     historySearch: "Search entries, emotions, keywords",
     noResults: "No matching entries",
+    historyOverviewTitle: "Recent Pattern",
     started: "You have started recording yourself",
     streak: (days) => `You have recorded ${days} days in a row`,
     previous: (summary) => `Last time you wrote: ${summary}`,
@@ -277,6 +282,7 @@ function renderHistory() {
   });
 
   elements.historyList.innerHTML = "";
+  renderHistoryOverview(filtered);
 
   if (!filtered.length) {
     const empty = document.createElement("div");
@@ -318,6 +324,36 @@ function renderHistory() {
     });
     elements.historyList.appendChild(group);
   });
+}
+
+function renderHistoryOverview(entries) {
+  if (!entries.length) {
+    elements.historyOverviewCard.classList.add("hidden");
+    return;
+  }
+
+  const repeated = findRepeatedKeyword(entries.slice(0, 5));
+  const dominantEmotion = findDominantEmotion(entries.slice(0, 5));
+  const streak = getStreakCount();
+  const lines = [];
+
+  if (state.language === "en") {
+    if (dominantEmotion) lines.push(`Your recent tone leans toward ${dominantEmotion}.`);
+    if (repeated) lines.push(`You keep circling back to "${repeated}".`);
+    if (streak > 1) lines.push(`You have kept this conversation going for ${streak} days.`);
+  } else {
+    if (dominantEmotion) lines.push(`最近这几条里，你的底色更偏向${dominantEmotion}。`);
+    if (repeated) lines.push(`你最近反复绕回“${repeated}”。`);
+    if (streak > 1) lines.push(`这段对话你已经连续保留了 ${streak} 天。`);
+  }
+
+  if (!lines.length) {
+    lines.push(t().patternFallback);
+  }
+
+  elements.historyOverviewCard.classList.remove("hidden");
+  elements.historyOverviewTitle.textContent = t().historyOverviewTitle;
+  elements.historyOverviewBody.textContent = lines.join(" ");
 }
 
 async function submitEntry() {
@@ -414,12 +450,13 @@ function analyzeEntry(content, previousEntries) {
   const emotion = detectEmotion(content);
   const keywords = extractKeywords(content);
   const emotionalSignals = detectEmotionalSignals(content);
+  const repeated = findRepeatedKeyword(previousEntries);
 
   return {
-    summary: buildSummary(content, emotion, keywords, emotionalSignals),
+    summary: buildSummary(content, emotion, keywords, emotionalSignals, repeated),
     emotion,
     keywords,
-    reflection: buildReflection(emotion, keywords, previousEntries, emotionalSignals),
+    reflection: buildReflection(emotion, keywords, previousEntries, emotionalSignals, repeated),
   };
 }
 
@@ -458,29 +495,31 @@ function extractKeywords(text) {
     : ["今天", "感受", "自己"];
 }
 
-function buildSummary(content, emotion, keywords, emotionalSignals) {
+function buildSummary(content, emotion, keywords, emotionalSignals, repeated) {
   const topic = keywords.slice(0, 2).join("、");
   const secondEmotion = emotionalSignals[1]?.score > 0 ? emotionalSignals[1].label : "";
+  const opening = pickLead(textTemperature(content), emotion);
 
   if (emotion === "焦虑") {
     return secondEmotion === "疲惫"
-      ? `你一边在扛着 ${topic || "眼前的事"}，一边已经有点被它耗住了。`
-      : `你这条记录里最明显的是不安，重心落在 ${topic || "当前的压力"}。`;
+      ? `${opening}你一边在扛着 ${topic || "眼前的事"}，一边已经有点被它耗住了。`
+      : `${opening}你这条记录里最明显的是不安，重心落在 ${topic || "当前的压力"}。`;
   }
   if (emotion === "疲惫") {
     return secondEmotion === "焦虑"
-      ? `你不只是累，更像是在被 ${topic || "这件事"} 持续消耗。`
-      : `你现在更像是在承受消耗，重点落在 ${topic || "眼前的负担"}。`;
+      ? `${opening}你不只是累，更像是在被 ${topic || "这件事"} 持续消耗。`
+      : `${opening}你现在更像是在承受消耗，重点落在 ${topic || "眼前的负担"}。`;
   }
-  if (emotion === "专注") return `你在试着把自己重新收束回来，注意力正落在 ${topic || "手上的事情"}。`;
-  if (emotion === "开心") return `这条记录偏轻也偏亮，最明显的是 ${topic || "让你舒服的部分"}。`;
-  if (emotion === "难过") return `你写下来的不是表面的情绪，更像是被 ${topic || "这件事"} 压低了。`;
-  return `你这条记录很克制，但真正重要的还是 ${topic || "当下的状态"}。`;
+  if (emotion === "专注") return `${opening}你在试着把自己重新收束回来，注意力正落在 ${topic || "手上的事情"}。`;
+  if (emotion === "开心") return `${opening}这条记录偏轻也偏亮，最明显的是 ${topic || "让你舒服的部分"}。`;
+  if (emotion === "难过") return `${opening}你写下来的不是表面的情绪，更像是被 ${topic || "这件事"} 压低了。`;
+  return repeated
+    ? `${opening}这条记录还是绕回了“${repeated}”，只是这次你写得更轻。`
+    : `${opening}你这条记录很克制，但真正重要的还是 ${topic || "当下的状态"}。`;
 }
 
-function buildReflection(emotion, keywords, previousEntries, emotionalSignals) {
+function buildReflection(emotion, keywords, previousEntries, emotionalSignals, repeated) {
   const anchor = keywords[0] || "这件事";
-  const repeated = findRepeatedKeyword(previousEntries);
   const secondEmotion = emotionalSignals[1]?.score > 0 ? emotionalSignals[1].label : "";
 
   if (emotion === "焦虑") {
@@ -526,6 +565,34 @@ function detectEmotionalSignals(text) {
     .sort((left, right) => right.score - left.score);
 }
 
+function textTemperature(text) {
+  if (/[!?！？]/.test(text)) return "sharp";
+  if (text.length >= 70) return "dense";
+  return "soft";
+}
+
+function pickLead(temperature, emotion) {
+  if (state.language === "en") {
+    if (temperature === "sharp") return "You wrote this with a visible edge. ";
+    if (temperature === "dense") return "There is a lot packed into this entry. ";
+    if (emotion === "平静") return "This one is quieter on the surface. ";
+    return "";
+  }
+
+  if (temperature === "sharp") return "你这次写得很急。";
+  if (temperature === "dense") return "这条里装了很多东西。";
+  if (emotion === "平静") return "表面上它是安静的。";
+  return "";
+}
+
+function findDominantEmotion(entries) {
+  const counts = new Map();
+  entries.forEach((entry) => {
+    counts.set(entry.feedback.emotion, (counts.get(entry.feedback.emotion) || 0) + 1);
+  });
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+}
+
 function findRepeatedKeyword(entries) {
   const keywords = entries.slice(0, 3).flatMap((entry) => entry.feedback.keywords);
   const counts = new Map();
@@ -562,7 +629,7 @@ function getStreakCount() {
 }
 
 function formatDate(isoString) {
-  return new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat(state.language, {
     month: "numeric",
     day: "numeric",
     hour: "2-digit",

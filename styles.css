@@ -37,7 +37,7 @@ input {
 .app-shell {
   position: relative;
   min-height: 100vh;
-  padding: 24px;
+  padding: calc(20px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
 }
 
 .language-switch {
@@ -105,6 +105,7 @@ input {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding-bottom: 20px;
 }
 
 .hero-copy {
@@ -161,7 +162,7 @@ input {
 
 .entry-input {
   width: 100%;
-  min-height: 50vh;
+  min-height: 52vh;
   padding: 0 6px;
   border: 0;
   background: transparent;
@@ -188,6 +189,11 @@ input {
 
 .compose-footer {
   padding-top: 4px;
+  position: sticky;
+  bottom: 0;
+  padding-bottom: 6px;
+  background: linear-gradient(180deg, rgba(247, 248, 251, 0), rgba(247, 248, 251, 0.9) 28%, rgba(247, 248, 251, 0.96));
+  backdrop-filter: blur(12px);
 }
 
 #save-hint,
@@ -318,6 +324,15 @@ input {
   animation: fade-in-side 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.history-overview-card {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid rgba(219, 225, 234, 0.88);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(22px);
+}
+
 .history-header h2 {
   margin: 2px 0 0;
   font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
@@ -325,9 +340,23 @@ input {
   letter-spacing: -0.03em;
 }
 
+.history-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-bottom: 10px;
+  background: linear-gradient(180deg, rgba(251, 252, 255, 0.96), rgba(251, 252, 255, 0.82));
+  backdrop-filter: blur(18px);
+}
+
 .history-search {
   display: block;
   margin-top: 18px;
+  position: sticky;
+  top: 72px;
+  z-index: 2;
+  background: rgba(251, 252, 255, 0.74);
+  padding-bottom: 10px;
 }
 
 .history-search input {
@@ -402,7 +431,7 @@ mark {
 .floating-write-button {
   position: fixed;
   right: 20px;
-  bottom: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
   width: 52px;
   height: 52px;
   border-radius: 999px;
@@ -449,16 +478,42 @@ mark {
 
 @media (max-width: 760px) {
   .app-shell {
-    padding: 18px 14px 32px;
+    padding: calc(14px + env(safe-area-inset-top)) 14px calc(22px + env(safe-area-inset-bottom));
   }
 
   .language-switch {
-    right: 68px;
+    top: calc(14px + env(safe-area-inset-top));
+    right: 66px;
+  }
+
+  .language-switch select,
+  .history-toggle {
+    min-height: 34px;
+    font-size: 12px;
+  }
+
+  .history-toggle {
+    top: calc(14px + env(safe-area-inset-top));
+  }
+
+  .compose-view,
+  .loading-view,
+  .feedback-view {
+    align-items: flex-start;
+    min-height: calc(100vh - 32px);
+    padding-top: 54px;
+  }
+
+  .compose-shell,
+  .feedback-shell,
+  .loading-shell {
+    width: 100%;
   }
 
   .entry-input {
-    min-height: 50vh;
-    font-size: 1.2rem;
+    min-height: 58vh;
+    font-size: 1.16rem;
+    line-height: 1.88;
   }
 
   .hero-line,
@@ -469,7 +524,44 @@ mark {
   .compose-footer,
   .feedback-header,
   .history-header {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
+  }
+
+  .compose-footer {
+    gap: 10px;
+  }
+
+  .submit-button,
+  .back-button,
+  .history-close {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .history-panel {
+    inset: 0;
+    width: 100vw;
+    padding: calc(14px + env(safe-area-inset-top)) 14px calc(88px + env(safe-area-inset-bottom));
+    border-left: 0;
+    box-shadow: none;
+  }
+
+  .history-search {
+    top: 86px;
+  }
+
+  .history-item {
+    padding: 15px 14px;
+    border-radius: 20px;
+  }
+
+  .history-preview {
+    -webkit-line-clamp: 3;
+  }
+
+  .floating-write-button {
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
   }
 }
