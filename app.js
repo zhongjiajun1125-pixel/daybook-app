@@ -10,6 +10,13 @@ const elements = {
   returningCard: document.querySelector("#returning-card"),
   returningKicker: document.querySelector("#returning-kicker"),
   returningSummary: document.querySelector("#returning-summary"),
+  emptyStateCard: document.querySelector("#empty-state-card"),
+  emptyStateTitle: document.querySelector("#empty-state-title"),
+  emptyStateBody: document.querySelector("#empty-state-body"),
+  emptyStateBody2: document.querySelector("#empty-state-body-2"),
+  emptyStateBody3: document.querySelector("#empty-state-body-3"),
+  emptyStateBody4: document.querySelector("#empty-state-body-4"),
+  startWritingButton: document.querySelector("#start-writing-button"),
   languageSelect: document.querySelector("#language-select"),
   reflectionAnchorCard: document.querySelector("#reflection-anchor-card"),
   reflectionAnchorLabel: document.querySelector("#reflection-anchor-label"),
@@ -42,6 +49,7 @@ const elements = {
   floatingWriteButton: document.querySelector("#floating-write-button"),
   historyGroupTemplate: document.querySelector("#history-item-template"),
   historyEntryTemplate: document.querySelector("#history-entry-template"),
+  composeShell: document.querySelector(".compose-shell"),
 };
 
 const HERO_LINES = [
@@ -54,6 +62,12 @@ const HERO_LINES = [
 
 const UI_COPY = {
   "zh-CN": {
+    emptyTitle: "这里是你的记录空间。",
+    emptyBody1: "不需要整理，不需要写完整，也不需要先想清楚。",
+    emptyBody2: "你只需要写下正在发生的一件事，或者刚刚出现的一个念头。",
+    emptyBody3: "一句话，一个词，甚至一段没有说完的表达，都可以被留下。",
+    emptyBody4: "这个系统不会评价你写了什么。它只负责记住。",
+    emptyAction: "开始记录",
     entryPlaceholder: "写下此刻。",
     reflectionAnchor: "上一问",
     saveEmpty: "自动保存草稿",
@@ -80,6 +94,12 @@ const UI_COPY = {
     earlier: "更早",
   },
   en: {
+    emptyTitle: "This is your recording space.",
+    emptyBody1: "You do not need to organize it, finish it, or fully understand it first.",
+    emptyBody2: "You only need to write one thing that is happening, or one thought that just appeared.",
+    emptyBody3: "A sentence, a word, even an unfinished fragment can be kept.",
+    emptyBody4: "This system does not judge what you write. It only remembers.",
+    emptyAction: "Start Writing",
     entryPlaceholder: "Write this moment.",
     reflectionAnchor: "Last Question",
     saveEmpty: "Draft autosaves",
@@ -118,6 +138,7 @@ const state = {
   historyOpen: false,
   historyQuery: "",
   idleHintTimer: null,
+  introDismissed: false,
   selfCheck: { failures: [] },
 };
 
@@ -142,6 +163,7 @@ function initialize() {
 function bindEvents() {
   elements.entryInput.addEventListener("input", () => {
     state.draft = elements.entryInput.value;
+    if (state.draft.trim()) state.introDismissed = true;
     persistDraft();
     syncSaveHint();
     scheduleIdleHint();
@@ -152,6 +174,14 @@ function bindEvents() {
       event.preventDefault();
       submitEntry();
     }
+  });
+
+  elements.startWritingButton.addEventListener("click", () => {
+    state.introDismissed = true;
+    render();
+    requestAnimationFrame(() => {
+      elements.entryInput.focus();
+    });
   });
 
   elements.submitButton.addEventListener("click", submitEntry);
@@ -188,6 +218,7 @@ function render() {
   renderLanguage();
   renderHeroLine();
   renderViews();
+  renderEmptyState();
   renderReturningHint();
   renderInsights();
   renderReflectionAnchor();
@@ -202,6 +233,17 @@ function renderViews() {
   elements.historyBackdrop.classList.toggle("hidden", !state.historyOpen);
   elements.historyPanel.classList.toggle("hidden", !state.historyOpen);
   elements.historyPanel.setAttribute("aria-hidden", String(!state.historyOpen));
+}
+
+function renderEmptyState() {
+  const showEmpty = !state.entries.length && !state.draft.trim() && !state.introDismissed;
+
+  elements.emptyStateCard.classList.toggle("hidden", !showEmpty);
+  elements.entryInput.classList.toggle("hidden", showEmpty);
+  elements.reflectionAnchorCard.classList.toggle("hidden", showEmpty || !state.currentFeedback?.reflection);
+  elements.composeShell.classList.toggle("empty-mode", showEmpty);
+  elements.historyToggle.classList.toggle("chrome-hidden", showEmpty);
+  elements.languageSelect.closest(".language-switch").classList.toggle("chrome-hidden", showEmpty);
 }
 
 function renderReturningHint() {
@@ -398,6 +440,7 @@ async function submitEntry() {
 
 function backToWrite() {
   state.currentView = "compose";
+  state.introDismissed = true;
   render();
   syncSaveHint();
   requestAnimationFrame(() => {
@@ -433,6 +476,7 @@ function syncStateFromHash() {
 
 function openEntryForWriting(entry) {
   state.draft = `${entry.content}\n`;
+  state.introDismissed = true;
   persistDraft();
   elements.entryInput.value = state.draft;
   state.currentFeedback = entry.feedback;
@@ -677,6 +721,12 @@ function renderHeroLine() {
 }
 
 function renderLanguage() {
+  elements.emptyStateTitle.textContent = t().emptyTitle;
+  elements.emptyStateBody.textContent = t().emptyBody1;
+  elements.emptyStateBody2.textContent = t().emptyBody2;
+  elements.emptyStateBody3.textContent = t().emptyBody3;
+  elements.emptyStateBody4.textContent = t().emptyBody4;
+  elements.startWritingButton.textContent = t().emptyAction;
   elements.entryInput.placeholder = t().entryPlaceholder;
   elements.reflectionAnchorLabel.textContent = t().reflectionAnchor;
   elements.submitButton.textContent = t().submit;

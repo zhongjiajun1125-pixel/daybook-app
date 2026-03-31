@@ -85,6 +85,11 @@ input {
   cursor: default;
 }
 
+.chrome-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .compose-view,
 .loading-view,
 .feedback-view {
@@ -106,6 +111,41 @@ input {
   flex-direction: column;
   gap: 16px;
   padding-bottom: 20px;
+}
+
+.compose-shell.empty-mode {
+  justify-content: center;
+  min-height: calc(100vh - 72px);
+}
+
+.empty-state-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 36rem;
+  padding: 8px 0 18px;
+}
+
+.empty-state-title,
+.empty-state-body {
+  margin: 0;
+}
+
+.empty-state-title {
+  font-size: clamp(1.5rem, 2.8vw, 2rem);
+  letter-spacing: -0.04em;
+  color: var(--text);
+}
+
+.empty-state-body {
+  max-width: 34ch;
+  color: #536072;
+  line-height: 1.78;
+}
+
+.empty-state-button {
+  width: fit-content;
+  margin-top: 8px;
 }
 
 .hero-copy {
@@ -507,6 +547,14 @@ mark {
   .compose-shell,
   .feedback-shell,
   .loading-shell {
+    width: 100%;
+  }
+
+  .empty-state-card {
+    padding-top: 28px;
+  }
+
+  .empty-state-button {
     width: 100%;
   }
 
