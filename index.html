@@ -34,6 +34,22 @@
           <p id="unlock-title" class="unlock-title">解锁</p>
           <p id="unlock-subtitle" class="unlock-subtitle">点一下开始</p>
           <button id="unlock-btn" class="unlock-btn" type="button">继续</button>
+          <div id="pin-panel" class="pin-panel hidden">
+            <input
+              id="pin-input"
+              class="pin-input"
+              type="password"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="6"
+              autocomplete="off"
+              placeholder="输入 PIN"
+            />
+            <div class="pin-actions">
+              <button id="pin-submit-btn" class="pin-action-btn" type="button">确认</button>
+              <button id="pin-cancel-btn" class="pin-action-btn" type="button">返回</button>
+            </div>
+          </div>
         </div>
       </section>
 

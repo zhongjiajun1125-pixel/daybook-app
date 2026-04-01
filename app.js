@@ -10,6 +10,7 @@ const LAST_ACTIVE_KEY = "trace-last-active";
 const FONT_STYLE_KEY = "trace-font-style";
 const BIO_KEY = "trace-bio-enrolled";
 const BIO_CRED_KEY = "trace-bio-cred-id";
+const PIN_HASH_KEY = "trace-pin-hash";
 const SYSTEM_STATE_KEY = "trace_system_v1";
 const PREDICTION_STATE_KEY = "trace_prediction_v1";
 
@@ -99,6 +100,45 @@ const LocalBio = {
   },
 };
 
+const LocalPin = {
+  isEnabled() {
+    return Boolean(window.localStorage.getItem(PIN_HASH_KEY));
+  },
+
+  async hash(pin) {
+    const encoded = new TextEncoder().encode(pin);
+    const digest = await window.crypto.subtle.digest("SHA-256", encoded);
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  },
+
+  async enroll(pin) {
+    if (!/^\d{4,6}$/.test(pin)) {
+      throw new Error("PIN 格式无效");
+    }
+
+    const hash = await this.hash(pin);
+    window.localStorage.setItem(PIN_HASH_KEY, hash);
+    state.pinEnabled = true;
+    return true;
+  },
+
+  async verify(pin) {
+    const storedHash = window.localStorage.getItem(PIN_HASH_KEY);
+    if (!storedHash) {
+      throw new Error("未找到 PIN");
+    }
+
+    const hash = await this.hash(pin);
+    if (hash !== storedHash) {
+      throw new Error("PIN 不匹配");
+    }
+
+    return true;
+  },
+};
+
 const SYSTEM_PROMPT_V1 = `
 你不是助手，不是心理医生，也不是安慰者。
 你是一个冷静、克制、长期观察用户的认知镜面。
@@ -132,6 +172,10 @@ const elements = {
   unlockBtn: document.getElementById("unlock-btn"),
   unlockTitle: document.getElementById("unlock-title"),
   unlockSubtitle: document.getElementById("unlock-subtitle"),
+  pinPanel: document.getElementById("pin-panel"),
+  pinInput: document.getElementById("pin-input"),
+  pinSubmitBtn: document.getElementById("pin-submit-btn"),
+  pinCancelBtn: document.getElementById("pin-cancel-btn"),
   onboardingView: document.getElementById("onboarding-view"),
   enterWritingBtn: document.getElementById("enter-writing-btn"),
   composeView: document.getElementById("compose-view"),
@@ -171,6 +215,7 @@ let state = {
   activeAnchor: null,
   fontStyle: window.localStorage.getItem(FONT_STYLE_KEY) || "system",
   bioEnrolled: window.localStorage.getItem(BIO_KEY) === "1",
+  pinEnabled: Boolean(window.localStorage.getItem(PIN_HASH_KEY)),
   echoChain: {},
   pendingEcho: null,
   lastEchoText: null,
@@ -536,16 +581,32 @@ function getBioCopy() {
       idle: "使用面容继续",
       active: "识别中",
       success: "已解锁",
-      failed: "解锁失败",
+      failed: "可改用 PIN",
     };
   }
 
   return {
-    idle: "启用面容保护",
+    idle: state.pinEnabled ? "先输入 PIN，再启用面容" : "先设置一个 PIN",
     active: "设置中",
     success: "已启用",
-    failed: "设置失败",
+    failed: "请改用 PIN",
   };
+}
+
+function showPinPanel(visible) {
+  if (!elements.pinPanel) return;
+  elements.pinPanel.classList.toggle("hidden", !visible);
+
+  if (visible) {
+    if (elements.pinInput) {
+      elements.pinInput.value = "";
+      window.setTimeout(() => elements.pinInput.focus(), 30);
+    }
+    if (elements.unlockBtn) elements.unlockBtn.classList.add("hidden");
+    return;
+  }
+
+  if (elements.unlockBtn) elements.unlockBtn.classList.remove("hidden");
 }
 
 function syncUnlockLabel(status = "idle") {
@@ -561,11 +622,28 @@ function syncUnlockLabel(status = "idle") {
   elements.unlockBtn.textContent = state.bioEnrolled ? "继续" : "启用";
 }
 
+async function fallbackToPin() {
+  syncUnlockLabel("failed");
+  showPinPanel(true);
+}
+
+async function completeUnlock() {
+  syncUnlockLabel("success");
+  window.setTimeout(() => {
+    showPinPanel(false);
+    bootSystem();
+  }, 280);
+}
+
 async function handleUnlock() {
   syncUnlockLabel("active");
 
   try {
     if (!state.bioEnrolled) {
+      if (!state.pinEnabled) {
+        await fallbackToPin();
+        return;
+      }
       await LocalBio.enroll();
       state.bioEnrolled = true;
       window.localStorage.setItem(BIO_KEY, "1");
@@ -573,27 +651,84 @@ async function handleUnlock() {
       await LocalBio.verify();
     }
 
-    syncUnlockLabel("success");
-    window.setTimeout(() => {
-      bootSystem();
-    }, 280);
+    await completeUnlock();
   } catch (error) {
     console.error("Bio Auth Failed:", error);
+    await fallbackToPin();
+  }
+}
+
+async function handlePinSubmit() {
+  const pin = elements.pinInput?.value.trim() || "";
+  if (!/^\d{4,6}$/.test(pin)) {
+    if (elements.unlockSubtitle) elements.unlockSubtitle.textContent = "请输入 4 到 6 位数字";
+    return;
+  }
+
+  syncUnlockLabel("active");
+
+  try {
+    if (!state.pinEnabled) {
+      await LocalPin.enroll(pin);
+    } else {
+      await LocalPin.verify(pin);
+    }
+
+    if (!state.bioEnrolled) {
+      if (elements.unlockSubtitle) {
+        elements.unlockSubtitle.textContent = "PIN 已保存，继续录入面容";
+      }
+      showPinPanel(false);
+      window.setTimeout(() => {
+        handleUnlock();
+      }, 200);
+      return;
+    }
+
+    await completeUnlock();
+  } catch (error) {
+    console.error("PIN Auth Failed:", error);
     syncUnlockLabel("failed");
+    if (elements.unlockSubtitle) {
+      elements.unlockSubtitle.textContent = state.pinEnabled ? "PIN 不正确" : "PIN 设置失败";
+    }
+    if (elements.pinInput) elements.pinInput.value = "";
     window.setTimeout(() => {
       syncUnlockLabel("idle");
-    }, 1500);
+      showPinPanel(true);
+    }, 1200);
   }
 }
 
 function init() {
   syncUnlockLabel("idle");
+  showPinPanel(false);
   bindEvents();
 }
 
 function bindEvents() {
   if (elements.unlockBtn) {
     elements.unlockBtn.addEventListener("click", handleUnlock);
+  }
+
+  if (elements.pinSubmitBtn) {
+    elements.pinSubmitBtn.addEventListener("click", handlePinSubmit);
+  }
+
+  if (elements.pinCancelBtn) {
+    elements.pinCancelBtn.addEventListener("click", () => {
+      showPinPanel(false);
+      syncUnlockLabel("idle");
+    });
+  }
+
+  if (elements.pinInput) {
+    elements.pinInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        handlePinSubmit();
+      }
+    });
   }
 
   if (elements.enterWritingBtn) {
