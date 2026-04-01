@@ -133,42 +133,63 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   position: relative;
   background-image: url("./image.png");
   background-repeat: no-repeat;
-  background-size: 300% 100%;
-  background-position: center center;
+  background-size: 300% auto;
+  background-position: 50% 14%;
   isolation: isolate;
 }
 
 .trace-logo-panel::after {
   content: "";
   position: absolute;
-  top: 7%;
+  top: 10%;
   left: 50%;
-  width: 42%;
+  width: 46%;
   aspect-ratio: 1;
   border-radius: 999px;
-  border: 2px solid rgba(23, 23, 23, 0.18);
+  border: 1.5px solid rgba(23, 23, 23, 0.24);
   opacity: 0;
   transform: translateX(-50%) scale(0.92);
   pointer-events: none;
 }
 
 .trace-logo-panel--hero {
-  width: min(280px, 62vw);
-  aspect-ratio: 0.72;
-  margin-bottom: 18px;
+  width: min(228px, 56vw);
+  aspect-ratio: 1;
+  margin-bottom: 10px;
+  background-size: 300% auto;
+  background-position: 50% 14%;
 }
 
 .trace-logo-panel--unlock {
-  width: 220px;
-  aspect-ratio: 0.72;
+  width: 190px;
+  aspect-ratio: 1;
   margin-bottom: 8px;
+  background-size: 300% auto;
+  background-position: 50% 14%;
 }
 
 .trace-logo-panel--mark {
-  width: 34px;
+  width: 32px;
   aspect-ratio: 1;
-  background-size: 300% 185%;
+  background-size: 300% auto;
   background-position: 50% 14%;
+}
+
+.trace-wordmark-wrap {
+  margin-bottom: 14px;
+}
+
+.trace-wordmark-wrap--unlock {
+  margin-bottom: 4px;
+}
+
+.trace-wordmark {
+  display: inline-block;
+  color: var(--text-primary);
+  font-size: clamp(2.2rem, 4vw, 3.35rem);
+  line-height: 1;
+  font-weight: 540;
+  letter-spacing: -0.045em;
 }
 
 .trace-loading.is-active .trace-logo-panel--mark::after,
@@ -380,6 +401,10 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 
 body.time-night .trace-logo-panel {
   filter: invert(1);
+}
+
+body.time-night .trace-logo-panel::after {
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .compose-shell {
@@ -777,15 +802,15 @@ body.listening-mode .status-indicator {
     clip-path: inset(0 100% 0 0);
   }
   20% {
-    opacity: 0.48;
+    opacity: 0.62;
   }
   72% {
-    opacity: 0.68;
+    opacity: 0.78;
     transform: translateX(-50%) rotate(0deg) scale(1);
     clip-path: inset(0 0 0 0);
   }
   100% {
-    opacity: 0.18;
+    opacity: 0.22;
     transform: translateX(-50%) rotate(0deg) scale(1);
     clip-path: inset(0 14% 0 0);
   }
@@ -798,7 +823,7 @@ body.listening-mode .status-indicator {
     clip-path: inset(0 100% 0 0);
   }
   100% {
-    opacity: 0.72;
+    opacity: 0.88;
     transform: translateX(-50%) rotate(0deg) scale(1);
     clip-path: inset(0 12% 0 0);
   }
@@ -806,12 +831,12 @@ body.listening-mode .status-indicator {
 
 @keyframes traceEchoOrbit {
   0% {
-    opacity: 0.42;
+    opacity: 0.56;
     transform: translateX(-50%) scale(0.92);
   }
   100% {
     opacity: 0;
-    transform: translateX(-50%) scale(1.16);
+    transform: translateX(-50%) scale(1.2);
   }
 }
 
