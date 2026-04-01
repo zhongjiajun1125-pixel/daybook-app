@@ -9,8 +9,95 @@ const DRAFT_KEY = "trace-draft-v1";
 const LAST_ACTIVE_KEY = "trace-last-active";
 const FONT_STYLE_KEY = "trace-font-style";
 const BIO_KEY = "trace-bio-enrolled";
+const BIO_CRED_KEY = "trace-bio-cred-id";
 const SYSTEM_STATE_KEY = "trace_system_v1";
 const PREDICTION_STATE_KEY = "trace_prediction_v1";
+
+let audioCtx = null;
+
+const LocalBio = {
+  isSupported() {
+    return window.isSecureContext && window.PublicKeyCredential !== undefined;
+  },
+
+  bufferToBase64(buffer) {
+    return window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  },
+
+  base64ToBuffer(base64) {
+    return Uint8Array.from(window.atob(base64), (char) => char.charCodeAt(0)).buffer;
+  },
+
+  async enroll() {
+    if (!this.isSupported()) {
+      throw new Error("当前环境不支持 WebAuthn");
+    }
+
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+    const userId = window.crypto.getRandomValues(new Uint8Array(16));
+    const hostname = window.location.hostname || "localhost";
+
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: {
+          name: "Trace Cognition",
+          id: hostname,
+        },
+        user: {
+          id: userId,
+          name: "trace-local-user",
+          displayName: "Trace Owner",
+        },
+        pubKeyCredParams: [
+          { alg: -7, type: "public-key" },
+          { alg: -257, type: "public-key" },
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "required",
+        },
+        timeout: 60000,
+      },
+    });
+
+    if (!credential?.rawId) {
+      throw new Error("未生成有效凭证");
+    }
+
+    window.localStorage.setItem(BIO_CRED_KEY, this.bufferToBase64(credential.rawId));
+    return true;
+  },
+
+  async verify() {
+    if (!this.isSupported()) {
+      throw new Error("当前环境不支持 WebAuthn");
+    }
+
+    const rawIdBase64 = window.localStorage.getItem(BIO_CRED_KEY);
+    if (!rawIdBase64) {
+      throw new Error("未找到生物识别凭证");
+    }
+
+    const challenge = window.crypto.getRandomValues(new Uint8Array(32));
+
+    await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        allowCredentials: [
+          {
+            id: this.base64ToBuffer(rawIdBase64),
+            type: "public-key",
+          },
+        ],
+        userVerification: "required",
+        timeout: 60000,
+      },
+    });
+
+    return true;
+  },
+};
 
 const SYSTEM_PROMPT_V1 = `
 你不是助手，不是心理医生，也不是安慰者。
@@ -283,12 +370,14 @@ function loadPredictionState() {
 
 let audioCtx = null;
 
-function playTraceFeedback() {
+async function playTraceFeedback() {
   try {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
 
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -327,7 +416,7 @@ const AIEngine = {
   },
 
   analyze(currentEntry, entries) {
-    const memory = MemoryEngine.build(entries, currentEntry.id);
+    const memory = MemoryEngine.build(entries, currentEntry);
     const promptEnvelope = this.createPromptEnvelope(currentEntry, memory);
     const interpretation = this.interpret(currentEntry, memory);
     const response = this.composeResponse(interpretation, memory);
@@ -386,9 +475,15 @@ const AIEngine = {
 };
 
 const MemoryEngine = {
-  build(entries, currentId) {
-    const currentIndex = entries.findIndex((entry) => entry.id === currentId);
-    const entriesForMemory = currentIndex === -1 ? entries : entries.slice(currentIndex + 1);
+  build(entries, currentEntry) {
+    const currentMs = new Date(currentEntry.timestamp).getTime();
+    const entriesForMemory = entries
+      .filter(
+        (entry) =>
+          entry.id !== currentEntry.id &&
+          new Date(entry.timestamp).getTime() < currentMs,
+      )
+      .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
     const shortWindow = entriesForMemory.slice(0, 6);
     const activePatterns = collectActivePatterns(shortWindow);
     const openLoops = collectOpenLoops(entriesForMemory);
@@ -471,16 +566,23 @@ async function handleUnlock() {
 
   try {
     if (!state.bioEnrolled) {
+      await LocalBio.enroll();
       state.bioEnrolled = true;
       window.localStorage.setItem(BIO_KEY, "1");
+    } else {
+      await LocalBio.verify();
     }
 
     syncUnlockLabel("success");
     window.setTimeout(() => {
       bootSystem();
     }, 280);
-  } catch {
+  } catch (error) {
+    console.error("Bio Auth Failed:", error);
     syncUnlockLabel("failed");
+    window.setTimeout(() => {
+      syncUnlockLabel("idle");
+    }, 1500);
   }
 }
 
@@ -1271,11 +1373,11 @@ function highlightCurrentNode(graph, latestEntry) {
 }
 
 function calculateEnergyScore(entries) {
-  const recent = entries.slice(0, 12);
+  if (!entries || entries.length === 0) return 0;
   let score = 0;
 
-  recent.forEach((entry) => {
-    const anchor = entry.metadata?.anchor;
+  entries.forEach((entry) => {
+    const anchor = entry.metadata?.emotionAnchor || entry.metadata?.anchor;
     if (anchor === "澄明") score += 2;
     if (anchor === "游离") score -= 0.5;
     if (anchor === "焦滞") score -= 1.5;
@@ -1286,8 +1388,11 @@ function calculateEnergyScore(entries) {
 }
 
 function getTrendDirection(entries) {
-  const recent = entries.slice(0, 6);
-  const older = entries.slice(6, 12);
+  if (!entries || entries.length < 6) return "→";
+
+  const windowSize = Math.min(6, Math.floor(entries.length / 2));
+  const recent = entries.slice(0, windowSize);
+  const older = entries.slice(windowSize, windowSize * 2);
 
   const recentScore = calculateEnergyScore(recent);
   const olderScore = calculateEnergyScore(older);
@@ -1406,8 +1511,9 @@ function calculateTrendInertia(entries) {
     };
   }
 
-  const recent = entries.slice(0, 6);
-  const older = entries.slice(6, 12);
+  const windowSize = Math.min(6, Math.floor(entries.length / 2));
+  const recent = entries.slice(0, windowSize);
+  const older = entries.slice(windowSize, windowSize * 2);
   const recentScore = calculateEnergyScore(recent);
   const olderScore = calculateEnergyScore(older);
   const diff = recentScore - olderScore;
@@ -1694,6 +1800,41 @@ function collectIdentityMemory(entries) {
   return identity;
 }
 
+async function playTraceFeedback() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+
+    filter.type = "lowpass";
+    filter.frequency.value = 880;
+    osc.type = "sine";
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(310, now + 0.18);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch {
+    // Keep silent to avoid blocking the main writing flow.
+  }
+}
 function normalizeEntries(entries) {
   return entries
     .filter(Boolean)
