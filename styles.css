@@ -398,6 +398,13 @@ body.focus-mode #global-tools {
 }
 .history-pattern-layer.empty { display: none; }
 
+.insight-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
 .insight-graph {
   margin-bottom: 20px;
   border-radius: 14px;
@@ -412,8 +419,8 @@ body.focus-mode #global-tools {
 }
 
 .insight-trends {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
@@ -432,14 +439,41 @@ body.focus-mode #global-tools {
 }
 
 .trend-main {
-  font-size: 1.4rem;
+  font-size: 1.1rem;
   color: var(--text-primary);
   margin-top: 8px;
+  line-height: 1.5;
 }
 
 .trend-sub {
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 0.86rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.trend-block {
+  margin-top: 0;
+}
+
+.trend-wide {
+  grid-column: 1 / -1;
+}
+
+.insight-copy {
+  margin-top: 6px;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.insight-legend {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px dashed var(--border-light);
+  background: rgba(255,255,255,0.01);
+  font-size: 0.82rem;
+  line-height: 1.7;
   color: var(--text-ghost);
 }
 
@@ -525,5 +559,5 @@ body.focus-mode #global-tools {
   .footer-actions { gap: 18px; }
   .app-shell { padding: 34px 18px 22px; }
   .echo-card { width: calc(100% - 8px); border-radius: 20px; }
-  .insight-trends { grid-template-columns: 1fr; }
+  .insight-overview { grid-template-columns: 1fr; }
 }

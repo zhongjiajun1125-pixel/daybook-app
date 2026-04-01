@@ -10,6 +10,7 @@ const LAST_ACTIVE_KEY = "trace-last-active";
 const FONT_STYLE_KEY = "trace-font-style";
 const BIO_KEY = "trace-bio-enrolled";
 const SYSTEM_STATE_KEY = "trace_system_v1";
+const PREDICTION_STATE_KEY = "trace_prediction_v1";
 
 const SYSTEM_PROMPT_V1 = `
 你不是助手，不是心理医生，也不是安慰者。
@@ -62,9 +63,13 @@ const elements = {
   swallowBtn: document.getElementById("swallow-btn"),
   historyPanel: document.getElementById("history-panel"),
   historyPatternLayer: document.getElementById("history-pattern-layer"),
+  insightSummary: document.getElementById("insight-summary"),
   insightCanvas: document.getElementById("insight-canvas"),
   trendEnergy: document.getElementById("trend-energy"),
   trendFocus: document.getElementById("trend-focus"),
+  trendPrediction: document.getElementById("trend-prediction"),
+  trendRisk: document.getElementById("trend-risk"),
+  insightLegend: document.getElementById("insight-legend"),
   historyList: document.getElementById("history-list"),
   historyEntryTemplate: document.getElementById("history-entry-template"),
   closeHistoryBtn: document.getElementById("close-history-btn"),
@@ -92,6 +97,12 @@ let implicitSession = {
 };
 
 let echoCardTimer = null;
+let insightResizeTimer = null;
+
+const predictionState = {
+  lastText: null,
+  lastUpdate: 0,
+};
 
 const health = {
   dbReady: false,
@@ -248,6 +259,28 @@ function loadSystemState() {
   }
 }
 
+function savePredictionState() {
+  try {
+    window.localStorage.setItem(PREDICTION_STATE_KEY, JSON.stringify(predictionState));
+  } catch {
+    // keep silent
+  }
+}
+
+function loadPredictionState() {
+  try {
+    const raw = window.localStorage.getItem(PREDICTION_STATE_KEY);
+    if (!raw) return;
+
+    const data = JSON.parse(raw);
+    predictionState.lastText = data.lastText || null;
+    predictionState.lastUpdate = data.lastUpdate || 0;
+  } catch {
+    predictionState.lastText = null;
+    predictionState.lastUpdate = 0;
+  }
+}
+
 let audioCtx = null;
 
 function playTraceFeedback() {
@@ -338,8 +371,8 @@ const AIEngine = {
       };
     }
 
-    const echo = buildEcho(interpretation, memory);
-    const question = buildQuestion(interpretation, memory);
+    const echo = buildAnalysisEcho(interpretation, memory);
+    const question = buildAnalysisQuestion(interpretation, memory);
     const patternHint = interpretation.pattern_link && interpretation.confidence >= 0.58
       ? interpretation.pattern_link
       : "";
@@ -549,6 +582,15 @@ function bindEvents() {
     if (elements.historyPanel.contains(event.target) || elements.historyToggle.contains(event.target)) return;
     closeHistory();
   });
+
+  window.addEventListener("resize", () => {
+    if (insightResizeTimer) window.clearTimeout(insightResizeTimer);
+    insightResizeTimer = window.setTimeout(() => {
+      if (state.historyOpen) {
+        renderInsightViewV2();
+      }
+    }, 120);
+  });
 }
 
 async function submitEntry() {
@@ -618,6 +660,10 @@ async function submitEntry() {
     } else {
       hideEchoCard(true);
     }
+
+    window.setTimeout(() => {
+      TracePrediction.update();
+    }, 600);
 
     window.setTimeout(() => {
       elements.saveStatus.textContent = "";
@@ -761,7 +807,7 @@ function scheduleEcho(entry, allEntries) {
   chain.lastTimestamp = Date.now();
 
   const level = Math.min(chain.count, 3);
-  const text = buildEcho(top, level);
+  const text = buildScheduledEcho(top, level);
   const textHash = JSON.stringify(text);
 
   if (state.lastEchoText === textHash) return null;
@@ -785,7 +831,7 @@ function scheduleEcho(entry, allEntries) {
   };
 }
 
-function buildEcho(pattern, level) {
+function buildScheduledEcho(pattern, level) {
   const { type } = pattern;
 
   if (type === "repeat") {
@@ -1119,6 +1165,21 @@ function buildGraph(entries) {
   return { nodes, edges };
 }
 
+function getGraphMetrics(graph) {
+  const nodeList = Object.values(graph.nodes);
+  const edgeList = Object.entries(graph.edges);
+
+  const topNode = nodeList.sort((left, right) => right.weight - left.weight)[0] || null;
+  const strongestEdge = edgeList.sort((left, right) => right[1] - left[1])[0] || null;
+
+  return {
+    topNode,
+    strongestEdge,
+    nodeCount: nodeList.length,
+    edgeCount: edgeList.length,
+  };
+}
+
 function layoutGraph(graph, canvas) {
   const nodeList = Object.values(graph.nodes);
   const centerX = canvas.width / 2;
@@ -1185,6 +1246,7 @@ function renderGraph() {
   });
 
   highlightCurrentNode(graph, state.entries[0]);
+  renderInsightLegend(graph);
 }
 
 function highlightCurrentNode(graph, latestEntry) {
@@ -1246,6 +1308,193 @@ function calculateFocusTrend(entries) {
   return "下降";
 }
 
+function renderInsightSummary() {
+  if (!elements.insightSummary) return;
+
+  const entries = state.entries.slice(0, 12);
+  const graph = buildGraph(state.entries);
+  const metrics = getGraphMetrics(graph);
+  const topNode = metrics.topNode?.id || "此刻";
+  const topEdge = metrics.strongestEdge ? metrics.strongestEdge[0].split("-").join(" / ") : "";
+  const latest = entries[0];
+  const anchor = latest?.metadata?.anchor || "未标记";
+
+  elements.insightSummary.innerHTML = `
+    <div class="trend-label">当前重心</div>
+    <div class="trend-main">${topNode}</div>
+    <div class="insight-copy">
+      最近的记录更常回到「${topNode}」，当前状态靠近「${anchor}」。
+      ${topEdge ? `最强连接出现在 ${topEdge}。` : ""}
+    </div>
+  `;
+}
+
+function calculateRiskSignal(entries) {
+  const inertia = calculateTrendInertia(entries);
+  const recent = entries.slice(0, 8);
+  const avgFriction = recent.length
+    ? recent.reduce((sum, entry) => sum + (entry.context?.friction || 0), 0) / recent.length
+    : 0;
+  const lateNightCount = recent.filter((entry) => entry.context?.timePhase === "深夜").length;
+  const openLoopCount = recent.filter((entry) =>
+    ["想", "应该", "但是"].some((anchor) => (entry.content || "").includes(anchor)),
+  ).length;
+
+  if (inertia.type === "down" && inertia.strength >= 3 && avgFriction >= 8) {
+    return {
+      level: "高",
+      text: "最近的状态在往下走，而且记录过程也更费力。",
+      note: "这说明某些内容正在持续消耗你。",
+    };
+  }
+
+  if (lateNightCount >= 4 || openLoopCount >= 4) {
+    return {
+      level: "中",
+      text: "有些内容在固定时段反复出现。",
+      note: "它还停在同一个未完成的位置。",
+    };
+  }
+
+  return {
+    level: "低",
+    text: "当前没有明显的高风险信号。",
+    note: "变化仍然在可观察范围内。",
+  };
+}
+
+function renderRiskSignal() {
+  if (!elements.trendRisk) return;
+
+  const risk = calculateRiskSignal(state.entries);
+  elements.trendRisk.innerHTML = `
+    <div class="trend-label">风险节点</div>
+    <div class="trend-main">${risk.level}</div>
+    <div class="trend-sub">${risk.text}</div>
+    <div class="trend-sub">${risk.note}</div>
+  `;
+}
+
+function renderInsightLegend(graph) {
+  if (!elements.insightLegend) return;
+
+  const metrics = getGraphMetrics(graph);
+  const latest = state.entries[0];
+  const activeKeys = [...(latest?.tags?.keywords || [])];
+  if (latest?.metadata?.anchor) activeKeys.push(latest.metadata.anchor);
+
+  elements.insightLegend.innerHTML = `
+    节点表示最近反复出现的词和状态，连线表示它们常常一起出现。
+    ${metrics.topNode ? `当前中心更靠近「${metrics.topNode.id}」。` : ""}
+    ${activeKeys.length ? `本次高亮：${activeKeys.join(" / ")}。` : ""}
+  `;
+}
+
+function getEntriesSafe() {
+  if (!state || !Array.isArray(state.entries)) return [];
+  return state.entries;
+}
+
+function calculateTrendInertia(entries) {
+  if (!entries || entries.length < 6) {
+    return {
+      type: "insufficient",
+      strength: 0,
+      diff: 0,
+      recentScore: 0,
+      olderScore: 0,
+    };
+  }
+
+  const recent = entries.slice(0, 6);
+  const older = entries.slice(6, 12);
+  const recentScore = calculateEnergyScore(recent);
+  const olderScore = calculateEnergyScore(older);
+  const diff = recentScore - olderScore;
+  const strength = Math.abs(diff);
+
+  let type = "stable";
+  if (strength >= 1) {
+    type = diff > 0 ? "up" : "down";
+  }
+
+  return {
+    type,
+    strength,
+    diff,
+    recentScore,
+    olderScore,
+  };
+}
+
+function buildTrendProjection(inertia) {
+  if (!inertia || inertia.type === "insufficient") {
+    return {
+      l1: "当前记录尚未形成明显变化轨迹。",
+      l2: "",
+      l3: "",
+    };
+  }
+
+  if (inertia.type === "up") {
+    return {
+      l1: "最近的状态在向上延续。",
+      l2: inertia.strength > 3 ? "这种变化正在逐渐强化。" : "这种变化仍在持续。",
+      l3: "",
+    };
+  }
+
+  if (inertia.type === "down") {
+    return {
+      l1: "最近的状态在向下延续。",
+      l2: inertia.strength > 3 ? "这种趋势正在加深。" : "这种变化仍在持续。",
+      l3: "",
+    };
+  }
+
+  return {
+    l1: "最近的状态没有明显变化。",
+    l2: "",
+    l3: "",
+  };
+}
+
+function shouldRenderPrediction(textObj) {
+  const text = JSON.stringify(textObj);
+  const hasRendered = Boolean(elements.trendPrediction?.innerHTML?.trim());
+  if (predictionState.lastText === text) {
+    return !hasRendered;
+  }
+
+  predictionState.lastText = text;
+  predictionState.lastUpdate = Date.now();
+  savePredictionState();
+  return true;
+}
+
+function renderPrediction() {
+  const entries = getEntriesSafe();
+  const inertia = calculateTrendInertia(entries);
+  const projection = buildTrendProjection(inertia);
+
+  if (!elements.trendPrediction) return;
+  if (!shouldRenderPrediction(projection)) return;
+
+  elements.trendPrediction.innerHTML = `
+    <div class="trend-label">变化趋势</div>
+    <div class="trend-main">${projection.l1}</div>
+    ${projection.l2 ? `<div class="trend-sub">${projection.l2}</div>` : ""}
+  `;
+}
+
+function initPredictionLayer() {
+  loadPredictionState();
+}
+
+function updatePrediction() {
+  renderPrediction();
+}
+
 function renderTrends() {
   if (!elements.trendEnergy || !elements.trendFocus) return;
 
@@ -1266,8 +1515,11 @@ function renderTrends() {
 }
 
 function renderInsightViewV2() {
+  renderInsightSummary();
   renderGraph();
   renderTrends();
+  TracePrediction.update();
+  renderRiskSignal();
 }
 
 function loadEntryForEdit(id) {
@@ -1309,6 +1561,7 @@ async function deleteEntry(id) {
     renderHistory();
   }
 
+  TracePrediction.update();
   runHealthChecks();
 }
 
@@ -1352,6 +1605,10 @@ async function importEntries(event) {
     state.entries = normalizeEntries(await db.getAll());
     await reanalyzeEntriesIfNeeded();
     triggerSystemEcho();
+    if (state.historyOpen) {
+      renderHistory();
+    }
+    TracePrediction.update();
     runHealthChecks();
   } catch {
     // Keep silent to avoid adding UI noise.
@@ -1597,7 +1854,7 @@ function inferConfidence(entry, surfaceEmotion, coreTension, patternLink) {
   return Math.min(score, 0.92);
 }
 
-function buildEcho(interpretation, memory) {
+function buildAnalysisEcho(interpretation, memory) {
   if (interpretation.core_tension) {
     return interpretation.core_tension.endsWith("。")
       ? interpretation.core_tension
@@ -1623,7 +1880,7 @@ function buildEcho(interpretation, memory) {
   return "你写下的不只是内容，还有当时的状态。";
 }
 
-function buildQuestion(interpretation, memory) {
+function buildAnalysisQuestion(interpretation, memory) {
   if (interpretation.core_tension.includes("行动")) {
     return "你是在怕结果，还是怕一开始就停不下来？";
   }
@@ -1696,9 +1953,16 @@ function summarizeHistoryEcho(parts) {
   return `${firstLine.slice(0, 42)}…`;
 }
 
+window.TracePrediction = {
+  init: initPredictionLayer,
+  update: updatePrediction,
+  calculate: calculateTrendInertia,
+};
+
 window.addEventListener("load", async () => {
   init();
   loadSystemState();
+  TracePrediction.init();
   cleanupEchoChain();
 
   if (state.bioEnrolled) {
