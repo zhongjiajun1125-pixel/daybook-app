@@ -26,8 +26,15 @@
 
     <main id="app-root" class="app-shell">
       
-      <section id="unlock-view" class="view-section active" style="display: flex; align-items: center; justify-content: center; height: 100%;">
-        <button id="unlock-btn" class="ghost-btn" style="font-size: 1.1rem; letter-spacing: 0.2em; padding: 20px;">点一下开始</button>
+      <section id="unlock-view" class="view-section unlock-view active">
+        <div class="unlock-shell">
+          <div class="unlock-orb">
+            <div class="unlock-ring"></div>
+          </div>
+          <p id="unlock-title" class="unlock-title">解锁</p>
+          <p id="unlock-subtitle" class="unlock-subtitle">点一下开始</p>
+          <button id="unlock-btn" class="unlock-btn" type="button">继续</button>
+        </div>
       </section>
 
       <section id="onboarding-view" class="view-section hidden">

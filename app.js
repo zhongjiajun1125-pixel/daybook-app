@@ -42,6 +42,8 @@ const elements = {
   historyToggle: document.getElementById("history-toggle"),
   unlockView: document.getElementById("unlock-view"),
   unlockBtn: document.getElementById("unlock-btn"),
+  unlockTitle: document.getElementById("unlock-title"),
+  unlockSubtitle: document.getElementById("unlock-subtitle"),
   onboardingView: document.getElementById("onboarding-view"),
   enterWritingBtn: document.getElementById("enter-writing-btn"),
   composeView: document.getElementById("compose-view"),
@@ -403,7 +405,7 @@ async function bootSystem() {
 function getBioCopy() {
   if (state.bioEnrolled) {
     return {
-      idle: "面容解锁",
+      idle: "使用面容继续",
       active: "识别中",
       success: "已解锁",
       failed: "解锁失败",
@@ -411,7 +413,7 @@ function getBioCopy() {
   }
 
   return {
-    idle: "启用解锁",
+    idle: "启用面容保护",
     active: "设置中",
     success: "已启用",
     failed: "设置失败",
@@ -421,7 +423,14 @@ function getBioCopy() {
 function syncUnlockLabel(status = "idle") {
   if (!elements.unlockBtn) return;
   const copy = getBioCopy();
-  elements.unlockBtn.textContent = copy[status] || copy.idle;
+  const current = copy[status] || copy.idle;
+  if (elements.unlockTitle) {
+    elements.unlockTitle.textContent = "解锁";
+  }
+  if (elements.unlockSubtitle) {
+    elements.unlockSubtitle.textContent = current;
+  }
+  elements.unlockBtn.textContent = state.bioEnrolled ? "继续" : "启用";
 }
 
 async function handleUnlock() {
@@ -434,7 +443,9 @@ async function handleUnlock() {
     }
 
     syncUnlockLabel("success");
-    window.setTimeout(bootSystem, 280);
+    window.setTimeout(() => {
+      bootSystem();
+    }, 280);
   } catch {
     syncUnlockLabel("failed");
   }
@@ -1090,20 +1101,47 @@ function buildGraph(entries) {
 
     keys.forEach((key) => {
       if (!nodes[key]) {
-        nodes[key] = { id: key, weight: 0 };
+        nodes[key] = { id: key, weight: 0, x: 0, y: 0 };
       }
       nodes[key].weight += 1;
     });
 
     for (let index = 0; index < keys.length; index += 1) {
       for (let inner = index + 1; inner < keys.length; inner += 1) {
-        const edgeKey = [keys[index], keys[inner]].sort().join("-");
+        const left = keys[index];
+        const right = keys[inner];
+        const edgeKey = left < right ? `${left}-${right}` : `${right}-${left}`;
         edges[edgeKey] = (edges[edgeKey] || 0) + 1;
       }
     }
   });
 
   return { nodes, edges };
+}
+
+function layoutGraph(graph, canvas) {
+  const nodeList = Object.values(graph.nodes);
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const radius = Math.min(canvas.width, canvas.height) * 0.35;
+
+  nodeList.forEach((node, index) => {
+    const angle = (index / Math.max(nodeList.length, 1)) * Math.PI * 2;
+    const hash = hashCode(node.id);
+    const r = radius * (0.6 + (hash % 40) / 100);
+
+    node.x = centerX + Math.cos(angle) * r;
+    node.y = centerY + Math.sin(angle) * r;
+  });
+}
+
+function hashCode(str) {
+  let hash = 0;
+  for (let index = 0; index < str.length; index += 1) {
+    hash = (hash << 5) - hash + str.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash);
 }
 
 function renderGraph() {
@@ -1114,68 +1152,88 @@ function renderGraph() {
   if (!ctx) return;
 
   canvas.width = canvas.offsetWidth;
-  canvas.height = 300;
+  canvas.height = 320;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const { nodes, edges } = buildGraph(state.entries);
-  const nodeList = Object.values(nodes);
-  const edgeList = Object.entries(edges);
+  const graph = buildGraph(state.entries);
+  layoutGraph(graph, canvas);
 
-  if (!nodeList.length) return;
-
-  const positionedNodes = nodeList.map((node, index) => {
-    const angle = (Math.PI * 2 * index) / Math.max(nodeList.length, 1);
-    const radius = Math.min(canvas.width, canvas.height) * 0.26 + node.weight * 2;
-    const x = canvas.width / 2 + Math.cos(angle) * radius * (index % 2 === 0 ? 0.9 : 0.6);
-    const y = canvas.height / 2 + Math.sin(angle) * radius * 0.58;
-    return {
-      ...node,
-      x,
-      y,
-      size: Math.min(node.weight * 3, 20),
-    };
-  });
-
-  edgeList.forEach(([edgeKey, weight]) => {
+  Object.entries(graph.edges).forEach(([edgeKey, weight]) => {
     const [sourceId, targetId] = edgeKey.split("-");
-    const source = positionedNodes.find((node) => node.id === sourceId);
-    const target = positionedNodes.find((node) => node.id === targetId);
+    const source = graph.nodes[sourceId];
+    const target = graph.nodes[targetId];
     if (!source || !target) return;
 
     ctx.beginPath();
     ctx.moveTo(source.x, source.y);
     ctx.lineTo(target.x, target.y);
-    ctx.strokeStyle = `rgba(160, 160, 160, ${Math.min(0.14 + weight * 0.05, 0.38)})`;
-    ctx.lineWidth = Math.min(1 + weight * 0.4, 2.6);
+    ctx.strokeStyle = `rgba(200,200,200,${Math.min(weight * 0.1, 0.3)})`;
+    ctx.lineWidth = Math.min(weight, 3);
     ctx.stroke();
   });
 
-  positionedNodes.forEach((node) => {
+  Object.values(graph.nodes).forEach((node) => {
+    const size = Math.min(node.weight * 2, 18);
     ctx.beginPath();
-    ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(200, 200, 200, 0.58)";
+    ctx.arc(node.x, node.y, size, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(220,220,220,0.8)";
     ctx.fill();
 
     ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--text-primary").trim() || "#fff";
     ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-    ctx.fillText(node.id, node.x + node.size + 4, node.y + 4);
+    ctx.fillText(node.id, node.x + size + 2, node.y);
+  });
+
+  highlightCurrentNode(graph, state.entries[0]);
+}
+
+function highlightCurrentNode(graph, latestEntry) {
+  if (!latestEntry || !elements.insightCanvas) return;
+
+  const ctx = elements.insightCanvas.getContext("2d");
+  if (!ctx) return;
+
+  const keys = [...(latestEntry.tags?.keywords || [])];
+  const emotionAnchor = latestEntry.metadata?.anchor;
+  if (emotionAnchor) keys.push(emotionAnchor);
+
+  keys.forEach((key) => {
+    const node = graph.nodes[key];
+    if (!node) return;
+
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, 22, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.stroke();
   });
 }
 
-function calculateEnergyTrend(entries) {
-  const recent = entries.slice(0, 10);
+function calculateEnergyScore(entries) {
+  const recent = entries.slice(0, 12);
   let score = 0;
 
   recent.forEach((entry) => {
     const anchor = entry.metadata?.anchor;
     if (anchor === "澄明") score += 2;
-    if (anchor === "焦滞") score -= 1;
+    if (anchor === "游离") score -= 0.5;
+    if (anchor === "焦滞") score -= 1.5;
     if (anchor === "沉缩") score -= 2;
   });
 
-  if (score > 5) return "上升";
-  if (score < -5) return "下降";
-  return "波动";
+  return score;
+}
+
+function getTrendDirection(entries) {
+  const recent = entries.slice(0, 6);
+  const older = entries.slice(6, 12);
+
+  const recentScore = calculateEnergyScore(recent);
+  const olderScore = calculateEnergyScore(older);
+  const diff = recentScore - olderScore;
+
+  if (diff > 2) return "↗";
+  if (diff < -2) return "↘";
+  return "→";
 }
 
 function calculateFocusTrend(entries) {
@@ -1191,17 +1249,19 @@ function calculateFocusTrend(entries) {
 function renderTrends() {
   if (!elements.trendEnergy || !elements.trendFocus) return;
 
-  const energy = calculateEnergyTrend(state.entries);
+  const score = calculateEnergyScore(state.entries);
+  const direction = getTrendDirection(state.entries);
   const focus = calculateFocusTrend(state.entries);
 
   elements.trendEnergy.innerHTML = `
-    <h3>能量趋势</h3>
-    <div class="trend-value">${energy}</div>
+    <div class="trend-label">能量</div>
+    <div class="trend-main">${direction}</div>
+    <div class="trend-sub">${score.toFixed(1)}</div>
   `;
 
   elements.trendFocus.innerHTML = `
-    <h3>专注趋势</h3>
-    <div class="trend-value">${focus}</div>
+    <div class="trend-label">专注</div>
+    <div class="trend-main">${focus}</div>
   `;
 }
 
@@ -1639,8 +1699,14 @@ function summarizeHistoryEcho(parts) {
 window.addEventListener("load", async () => {
   init();
   loadSystemState();
-  await bootSystem();
   cleanupEchoChain();
+
+  if (state.bioEnrolled) {
+    showView("unlock");
+    return;
+  }
+
+  await bootSystem();
   checkPendingEchoOnBoot();
 });
 
