@@ -9,6 +9,8 @@ const DRAFT_KEY = "trace-draft-v1";
 const LAST_ACTIVE_KEY = "trace-last-active";
 const FONT_STYLE_KEY = "trace-font-style";
 
+let audioCtx = null;
+
 const SYSTEM_PROMPT_V1 = `
 你不是助手，不是心理医生，也不是安慰者。
 你是一个冷静、克制、长期观察用户的认知镜面。
@@ -204,7 +206,7 @@ const AIEngine = {
   },
 
   analyze(currentEntry, entries) {
-    const memory = MemoryEngine.build(entries, currentEntry.id);
+    const memory = MemoryEngine.build(entries, currentEntry);
     const promptEnvelope = this.createPromptEnvelope(currentEntry, memory);
     const interpretation = this.interpret(currentEntry, memory);
     const response = this.composeResponse(interpretation, memory);
@@ -263,9 +265,15 @@ const AIEngine = {
 };
 
 const MemoryEngine = {
-  build(entries, currentId) {
-    const currentIndex = entries.findIndex((entry) => entry.id === currentId);
-    const entriesForMemory = currentIndex === -1 ? entries : entries.slice(currentIndex + 1);
+  build(entries, currentEntry) {
+    const currentMs = new Date(currentEntry.timestamp).getTime();
+    const entriesForMemory = entries
+      .filter(
+        (entry) =>
+          entry.id !== currentEntry.id &&
+          new Date(entry.timestamp).getTime() < currentMs,
+      )
+      .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
     const shortWindow = entriesForMemory.slice(0, 6);
     const activePatterns = collectActivePatterns(shortWindow);
     const openLoops = collectOpenLoops(entriesForMemory);
@@ -433,6 +441,9 @@ async function submitEntry() {
     metadata: state.activeAnchor ? { anchor: state.activeAnchor } : null,
   };
 
+  elements.saveStatus.textContent = "封存中…";
+  playTraceFeedback();
+  elements.rawMemoryInput.classList.add("ink-dissolve");
   entry.analysis = AIEngine.analyze(entry, [entry, ...state.entries.filter((item) => item.id !== entry.id)]);
 
   await db.put(entry);
@@ -441,6 +452,7 @@ async function submitEntry() {
 
   elements.saveStatus.textContent = "已封存";
   window.setTimeout(() => {
+    elements.rawMemoryInput.classList.remove("ink-dissolve");
     elements.saveStatus.textContent = "";
   }, 1800);
 
@@ -736,6 +748,42 @@ function collectIdentityMemory(entries) {
   return identity;
 }
 
+async function playTraceFeedback() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+
+    filter.type = "lowpass";
+    filter.frequency.value = 880;
+    osc.type = "sine";
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(310, now + 0.18);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch {
+    // Keep silent to avoid blocking the main writing flow.
+  }
+}
+
 function normalizeEntries(entries) {
   return entries
     .filter(Boolean)
@@ -867,6 +915,85 @@ function inferConfidence(entry, surfaceEmotion, coreTension, patternLink) {
   if (entry.context?.friction >= 8) score += 0.12;
   if (entry.context?.durationSec >= 120) score += 0.1;
   return Math.min(score, 0.92);
+}
+
+function calculateEnergyScore(entries) {
+  if (!entries || entries.length === 0) return 0;
+
+  let score = 0;
+
+  entries.forEach((entry) => {
+    const emotionAnchor = entry.metadata?.emotionAnchor || entry.metadata?.anchor;
+
+    switch (emotionAnchor) {
+      case "澄明":
+        score += 2;
+        break;
+      case "游离":
+        score -= 0.5;
+        break;
+      case "焦滞":
+        score -= 1.5;
+        break;
+      case "沉缩":
+        score -= 2;
+        break;
+      default:
+        score += 0;
+    }
+  });
+
+  return score;
+}
+
+function calculateTrendInertia(entries) {
+  if (!entries || entries.length < 6) {
+    return {
+      type: "insufficient",
+      strength: 0,
+      diff: 0,
+      recentScore: 0,
+      olderScore: 0,
+    };
+  }
+
+  const windowSize = Math.min(6, Math.floor(entries.length / 2));
+  const recent = entries.slice(0, windowSize);
+  const older = entries.slice(windowSize, windowSize * 2);
+
+  const recentScore = calculateEnergyScore(recent);
+  const olderScore = calculateEnergyScore(older);
+  const diff = recentScore - olderScore;
+  const strength = Math.abs(diff);
+
+  let type = "stable";
+  if (strength >= 1) {
+    type = diff > 0 ? "up" : "down";
+  }
+
+  return {
+    type,
+    strength,
+    diff,
+    recentScore,
+    olderScore,
+  };
+}
+
+function getTrendDirection(entries) {
+  if (!entries || entries.length < 6) return "→";
+
+  const windowSize = Math.min(6, Math.floor(entries.length / 2));
+  const recent = entries.slice(0, windowSize);
+  const older = entries.slice(windowSize, windowSize * 2);
+
+  const recentScore = calculateEnergyScore(recent);
+  const olderScore = calculateEnergyScore(older);
+  const diff = recentScore - olderScore;
+
+  if (diff > 2) return "↗";
+  if (diff < -2) return "↘";
+  return "→";
 }
 
 function buildEcho(interpretation, memory) {
