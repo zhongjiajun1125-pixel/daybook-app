@@ -15,6 +15,7 @@ const SYSTEM_STATE_KEY = "trace_system_v1";
 const PREDICTION_STATE_KEY = "trace_prediction_v1";
 
 let audioCtx = null;
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
 const LocalBio = {
   isSupported() {
@@ -230,6 +231,8 @@ let implicitSession = {
 
 let echoCardTimer = null;
 let insightResizeTimer = null;
+let graphAnimationFrame = null;
+let recognition = null;
 
 const predictionState = {
   lastText: null,
@@ -244,6 +247,11 @@ const health = {
     canSubmit: false,
     canRenderHistory: false,
   },
+};
+
+const voiceState = {
+  supported: Boolean(SpeechRecognitionCtor),
+  listening: false,
 };
 
 const Lexicon = {
@@ -576,9 +584,12 @@ async function bootSystem() {
 }
 
 function getBioCopy() {
+  const hasCredential = Boolean(window.localStorage.getItem(BIO_CRED_KEY));
+  const canUseBio = LocalBio.isSupported() && hasCredential;
+
   if (state.bioEnrolled) {
     return {
-      idle: "使用面容继续",
+      idle: canUseBio ? "使用面容继续" : "改用 PIN 继续",
       active: "识别中",
       success: "已解锁",
       failed: "可改用 PIN",
@@ -591,6 +602,150 @@ function getBioCopy() {
     success: "已启用",
     failed: "请改用 PIN",
   };
+}
+
+function setStatusMessage(text = "", timeout = 0) {
+  if (!elements.saveStatus) return;
+  elements.saveStatus.textContent = text;
+
+  if (setStatusMessage._timer) {
+    window.clearTimeout(setStatusMessage._timer);
+    setStatusMessage._timer = null;
+  }
+
+  if (timeout > 0) {
+    setStatusMessage._timer = window.setTimeout(() => {
+      if (elements.saveStatus.textContent === text) {
+        elements.saveStatus.textContent = "";
+      }
+    }, timeout);
+  }
+}
+
+function insertTextAtCursor(text) {
+  const input = elements.rawMemoryInput;
+  if (!input || !text) return;
+
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  const prefix = input.value.slice(0, start);
+  const suffix = input.value.slice(end);
+  const spacer = prefix && !/\s$/.test(prefix) ? " " : "";
+  const insertion = `${spacer}${text}`;
+
+  input.value = `${prefix}${insertion}${suffix}`;
+  const caret = prefix.length + insertion.length;
+  input.setSelectionRange(caret, caret);
+  input.focus();
+
+  state.draft = input.value;
+  window.localStorage.setItem(DRAFT_KEY, state.draft);
+}
+
+function stopVoiceCapture({ silent = false } = {}) {
+  if (!recognition || !voiceState.listening) {
+    voiceState.listening = false;
+    document.body.classList.remove("listening-mode");
+    return;
+  }
+
+  voiceState.listening = false;
+  recognition.stop();
+  document.body.classList.remove("listening-mode");
+  if (!silent) {
+    setStatusMessage("语音已停止", 1200);
+  }
+}
+
+function initVoiceRecognition() {
+  if (!voiceState.supported || recognition) {
+    return;
+  }
+
+  recognition = new SpeechRecognitionCtor();
+  recognition.lang = "zh-CN";
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    voiceState.listening = true;
+    document.body.classList.add("listening-mode");
+    setStatusMessage("正在倾听…", 0);
+  };
+
+  recognition.onresult = (event) => {
+    let finalTranscript = "";
+    let interimTranscript = "";
+
+    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      const transcript = event.results[index][0]?.transcript?.trim() || "";
+      if (!transcript) continue;
+
+      if (event.results[index].isFinal) {
+        finalTranscript += transcript;
+      } else {
+        interimTranscript += transcript;
+      }
+    }
+
+    if (finalTranscript) {
+      insertTextAtCursor(finalTranscript);
+      setStatusMessage("语音已写入", 1400);
+    }
+  };
+
+  recognition.onerror = (event) => {
+    voiceState.listening = false;
+    document.body.classList.remove("listening-mode");
+
+    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      setStatusMessage("未获得麦克风权限", 1800);
+      return;
+    }
+
+    if (event.error === "no-speech") {
+      setStatusMessage("没有识别到语音", 1400);
+      return;
+    }
+
+    if (event.error === "aborted") {
+      return;
+    }
+
+    setStatusMessage("语音不可用", 1800);
+  };
+
+  recognition.onend = () => {
+    const wasListening = voiceState.listening;
+    voiceState.listening = false;
+    document.body.classList.remove("listening-mode");
+
+    if (wasListening && elements.saveStatus?.textContent === "正在倾听…") {
+      setStatusMessage("", 0);
+    }
+  };
+}
+
+function startVoiceCapture() {
+  if (!voiceState.supported) {
+    setStatusMessage("当前浏览器不支持语音", 1800);
+    return;
+  }
+
+  initVoiceRecognition();
+  if (!recognition) return;
+
+  if (voiceState.listening) {
+    stopVoiceCapture();
+    return;
+  }
+
+  try {
+    recognition.start();
+  } catch {
+    setStatusMessage("语音暂时不可用", 1800);
+  }
 }
 
 function showPinPanel(visible) {
@@ -619,11 +774,16 @@ function syncUnlockLabel(status = "idle") {
   if (elements.unlockSubtitle) {
     elements.unlockSubtitle.textContent = current;
   }
-  elements.unlockBtn.textContent = state.bioEnrolled ? "继续" : "启用";
+  elements.unlockBtn.textContent = state.bioEnrolled || state.pinEnabled ? "继续" : "启用";
 }
 
 async function fallbackToPin() {
-  syncUnlockLabel("failed");
+  if (elements.unlockTitle) {
+    elements.unlockTitle.textContent = "解锁";
+  }
+  if (elements.unlockSubtitle) {
+    elements.unlockSubtitle.textContent = state.pinEnabled ? "输入 PIN 继续" : "先设置一个 PIN";
+  }
   showPinPanel(true);
 }
 
@@ -639,15 +799,30 @@ async function handleUnlock() {
   syncUnlockLabel("active");
 
   try {
+    if (state.bioEnrolled && !window.localStorage.getItem(BIO_CRED_KEY)) {
+      state.bioEnrolled = false;
+      window.localStorage.removeItem(BIO_KEY);
+    }
+
     if (!state.bioEnrolled) {
       if (!state.pinEnabled) {
         await fallbackToPin();
         return;
       }
+
+      if (!LocalBio.isSupported()) {
+        await fallbackToPin();
+        return;
+      }
+
       await LocalBio.enroll();
       state.bioEnrolled = true;
       window.localStorage.setItem(BIO_KEY, "1");
     } else {
+      if (!LocalBio.isSupported()) {
+        await fallbackToPin();
+        return;
+      }
       await LocalBio.verify();
     }
 
@@ -701,8 +876,14 @@ async function handlePinSubmit() {
 }
 
 function init() {
+  if (state.bioEnrolled && !window.localStorage.getItem(BIO_CRED_KEY)) {
+    state.bioEnrolled = false;
+    window.localStorage.removeItem(BIO_KEY);
+  }
+
   syncUnlockLabel("idle");
   showPinPanel(false);
+  initVoiceRecognition();
   bindEvents();
 }
 
@@ -761,6 +942,13 @@ function bindEvents() {
     window.localStorage.setItem(DRAFT_KEY, state.draft);
   });
 
+  elements.rawMemoryInput.addEventListener("dblclick", (event) => {
+    const input = event.currentTarget;
+    if (!input.value || input.selectionStart === input.value.length) {
+      startVoiceCapture();
+    }
+  });
+
   elements.anchorBtns.forEach((button) => {
     button.addEventListener("click", () => {
       const anchor = button.dataset.anchor;
@@ -809,6 +997,18 @@ function bindEvents() {
   }
 
   document.addEventListener("keydown", (event) => {
+    if (event.ctrlKey && event.code === "Space") {
+      event.preventDefault();
+      startVoiceCapture();
+      return;
+    }
+
+    if (event.key === "Escape" && voiceState.listening) {
+      event.preventDefault();
+      stopVoiceCapture();
+      return;
+    }
+
     if (event.key === "Escape" && state.historyOpen) {
       closeHistory();
     }
@@ -831,6 +1031,10 @@ function bindEvents() {
 }
 
 async function submitEntry() {
+  if (voiceState.listening) {
+    stopVoiceCapture({ silent: true });
+  }
+
   const content = elements.rawMemoryInput.value.trim();
   if (!content && !state.activeAnchor) return;
 
@@ -1449,44 +1653,60 @@ function renderGraph() {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
+  if (graphAnimationFrame) {
+    window.cancelAnimationFrame(graphAnimationFrame);
+    graphAnimationFrame = null;
+  }
+
   canvas.width = canvas.offsetWidth;
   canvas.height = 320;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const graph = buildGraph(state.entries);
   layoutGraph(graph, canvas);
 
-  Object.entries(graph.edges).forEach(([edgeKey, weight]) => {
-    const [sourceId, targetId] = edgeKey.split("-");
-    const source = graph.nodes[sourceId];
-    const target = graph.nodes[targetId];
-    if (!source || !target) return;
+  const draw = (timestamp) => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    ctx.beginPath();
-    ctx.moveTo(source.x, source.y);
-    ctx.lineTo(target.x, target.y);
-    ctx.strokeStyle = `rgba(200,200,200,${Math.min(weight * 0.1, 0.3)})`;
-    ctx.lineWidth = Math.min(weight, 3);
-    ctx.stroke();
-  });
+    Object.entries(graph.edges).forEach(([edgeKey, weight]) => {
+      const [sourceId, targetId] = edgeKey.split("-");
+      const source = graph.nodes[sourceId];
+      const target = graph.nodes[targetId];
+      if (!source || !target) return;
 
-  Object.values(graph.nodes).forEach((node) => {
-    const size = Math.min(node.weight * 2, 18);
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, size, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(220,220,220,0.8)";
-    ctx.fill();
+      const sourceOffset = Math.sin((timestamp / 1100) + hashCode(source.id) * 0.01) * 1.6;
+      const targetOffset = Math.sin((timestamp / 1100) + hashCode(target.id) * 0.01) * 1.6;
 
-    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--text-primary").trim() || "#fff";
-    ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-    ctx.fillText(node.id, node.x + size + 2, node.y);
-  });
+      ctx.beginPath();
+      ctx.moveTo(source.x, source.y + sourceOffset);
+      ctx.lineTo(target.x, target.y + targetOffset);
+      ctx.strokeStyle = `rgba(200,200,200,${Math.min(weight * 0.1, 0.3)})`;
+      ctx.lineWidth = Math.min(weight, 3);
+      ctx.stroke();
+    });
 
-  highlightCurrentNode(graph, state.entries[0]);
+    Object.values(graph.nodes).forEach((node) => {
+      const size = Math.min(node.weight * 2, 18);
+      const offsetY = Math.sin((timestamp / 1100) + hashCode(node.id) * 0.01) * 1.6;
+
+      ctx.beginPath();
+      ctx.arc(node.x, node.y + offsetY, size, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(220,220,220,0.8)";
+      ctx.fill();
+
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--text-primary").trim() || "#fff";
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+      ctx.fillText(node.id, node.x + size + 2, node.y + offsetY);
+    });
+
+    highlightCurrentNode(graph, state.entries[0], timestamp);
+    graphAnimationFrame = window.requestAnimationFrame(draw);
+  };
+
   renderInsightLegend(graph);
+  graphAnimationFrame = window.requestAnimationFrame(draw);
 }
 
-function highlightCurrentNode(graph, latestEntry) {
+function highlightCurrentNode(graph, latestEntry, timestamp = 0) {
   if (!latestEntry || !elements.insightCanvas) return;
 
   const ctx = elements.insightCanvas.getContext("2d");
@@ -1499,9 +1719,10 @@ function highlightCurrentNode(graph, latestEntry) {
   keys.forEach((key) => {
     const node = graph.nodes[key];
     if (!node) return;
+    const offsetY = Math.sin((timestamp / 1100) + hashCode(node.id) * 0.01) * 1.6;
 
     ctx.beginPath();
-    ctx.arc(node.x, node.y, 22, 0, Math.PI * 2);
+    ctx.arc(node.x, node.y + offsetY, 22, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(255,255,255,0.2)";
     ctx.stroke();
   });
@@ -2202,6 +2423,27 @@ function resolveTimePhase(date) {
   return "日间";
 }
 
+function resolveAmbientClass(date = new Date()) {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 10) return "time-morning";
+  if (hour >= 10 && hour < 18) return "time-noon";
+  return "time-night";
+}
+
+function syncThemeColor(themeClass) {
+  const themeColor = themeClass === "time-night" ? "#1a1b1e" : "#f9fafb";
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    meta.setAttribute("content", themeColor);
+  });
+}
+
+function setAmbientLight(date = new Date()) {
+  const nextClass = resolveAmbientClass(date);
+  document.body.classList.remove("time-morning", "time-day", "time-noon", "time-night");
+  document.body.classList.add(nextClass);
+  syncThemeColor(nextClass);
+}
+
 function findMostFrequent(values) {
   if (!values || !values.length) return null;
   const counts = values.reduce((accumulator, value) => {
@@ -2237,11 +2479,15 @@ window.TracePrediction = {
 
 window.addEventListener("load", async () => {
   init();
+  setAmbientLight();
+  window.setInterval(() => {
+    setAmbientLight();
+  }, 30 * 60 * 1000);
   loadSystemState();
   TracePrediction.init();
   cleanupEchoChain();
 
-  if (state.bioEnrolled) {
+  if (state.bioEnrolled || state.pinEnabled) {
     showView("unlock");
     return;
   }
