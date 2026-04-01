@@ -2471,9 +2471,3 @@ window.addEventListener("load", async () => {
     showView("onboarding");
   }
 });
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js?v=20260401-2").catch(() => {});
-  });
-}
