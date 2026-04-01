@@ -60,6 +60,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 .ghost-btn:hover { color: var(--text-primary); }
 
 .narrative-shell { color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 48px; animation: fadeIn 1.5s ease-out; }
+.hero-text { font-size: 1.25rem; font-weight: 500; color: var(--text-primary); letter-spacing: 0.02em; }
 .primary-action-btn { font-size: 1.05rem; color: var(--text-primary); cursor: pointer; border-bottom: 1px solid var(--text-primary); padding-bottom: 2px; }
 
 .compose-shell { display: flex; flex-direction: column; width: 100%; height: 65vh; justify-content: center; }
@@ -78,7 +79,6 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 }
 .seamless-input::placeholder { color: var(--text-ghost); opacity: 0.5; }
 
-/* 认知锚点样式：极低存在感 */
 .anchor-bar {
   display: flex; gap: 12px; padding-bottom: 16px;
   opacity: 0.6; transition: opacity 0.3s ease;
@@ -103,28 +103,47 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 .subtle-submit-btn:hover { color: var(--text-primary); }
 .status-indicator { font-size: 0.8rem; letter-spacing: 0.05em; }
 
+/* 拓扑页核心样式 */
 .history-panel {
-  position: fixed; inset: 0 0 0 auto; width: min(380px, 100vw);
+  position: fixed; inset: 0 0 0 auto; width: min(420px, 100vw);
   background: var(--bg-color); border-left: 1px solid var(--border-light);
   padding: 40px 32px; overflow-y: auto; z-index: 100;
   box-shadow: -10px 0 40px rgba(0,0,0,0.05);
   animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.history-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 48px; }
-.history-header h2 { font-size: 1.1rem; font-weight: 500; color: var(--text-primary); }
+.history-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 24px; }
+.history-header h2 { font-size: 1.1rem; font-weight: 500; color: var(--text-primary); letter-spacing: 0.05em;}
 .close-btn { color: var(--text-ghost); cursor: pointer; font-size: 0.9rem; }
-.history-list { display: flex; flex-direction: column; gap: 32px; }
-.history-item { display: flex; flex-direction: column; gap: 4px; }
+
+/* 模式层视图 */
+.history-pattern-layer {
+  padding: 16px; background: var(--accent-friction);
+  border-left: 2px solid var(--text-secondary); margin-bottom: 32px;
+  font-size: 0.9rem; color: var(--text-primary); line-height: 1.7;
+  font-family: monospace; letter-spacing: 0.02em; white-space: pre-wrap;
+}
+.history-pattern-layer.empty { display: none; }
+
+/* 时间折叠分割线 */
+.history-date-divider {
+  font-size: 0.75rem; color: var(--text-ghost); margin: 32px 0 16px 0;
+  letter-spacing: 0.1em; border-bottom: 1px solid var(--border-light); padding-bottom: 4px;
+}
+
+.history-list { display: flex; flex-direction: column; gap: 16px; }
+.history-item { display: flex; flex-direction: column; gap: 4px; opacity: 0.85; transition: opacity 0.2s; }
+.history-item:hover { opacity: 1; }
 .history-meta { display: flex; gap: 12px; align-items: center; }
 .history-time { font-size: 0.8rem; color: var(--text-ghost); font-family: monospace; }
-.history-friction { font-size: 0.75rem; color: var(--text-ghost); background: var(--accent-friction); padding: 2px 6px; border-radius: 4px;}
+.history-metadata { font-size: 0.75rem; color: var(--text-primary); font-weight: 500;}
+.history-friction { font-size: 0.7rem; color: var(--text-ghost); background: var(--accent-friction); padding: 2px 6px; border-radius: 4px;}
 
+/* 文本截断设计，只展示摘要 */
 .history-raw-text { 
-  font-size: 0.95rem; color: var(--text-primary); line-height: 1.6; margin-top: 4px;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  font-size: 0.95rem; color: var(--text-secondary); line-height: 1.6; margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
   overflow: hidden; text-overflow: ellipsis;
 }
-.history-metadata { font-size: 0.8rem; color: var(--text-ghost); margin-top: 4px; opacity: 0.6; }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }

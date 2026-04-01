@@ -20,7 +20,7 @@
       <input type="file" id="import-file-input" accept=".json" style="display: none;" />
       <button id="import-data-btn" class="ghost-btn" type="button">导入</button>
       <button id="export-data-btn" class="ghost-btn" type="button">导出</button>
-      <button id="history-toggle" class="ghost-btn" type="button">历史</button>
+      <button id="history-toggle" class="ghost-btn" type="button">拓扑</button>
     </nav>
 
     <main id="app-root" class="app-shell">
@@ -31,21 +31,17 @@
 
       <section id="onboarding-view" class="view-section hidden">
         <div class="narrative-shell">
-          <p>这里是 Trace。</p>
-          <p>一个由 cyh 构建的认知显影系统。</p>
-          <br>
-          <p>它不会对你做任何评价。</p>
-          <p>不需要整理，也不需要写得完整。</p>
-          <p>你只需要丢下一件正在发生的事，或一个闪现的想法。</p>
-          <p>哪怕只有几个字。</p>
-          <br>
-          <p>系统只负责吞咽和保存。</p>
-          <p>并在未来的某一天，向你折射出潜意识的真实轨迹。</p>
-          <br>
-          <p>当你准备好了，留下第一道印迹。</p>
+          <p class="hero-text">给不想被打扰，但又隐约想看清自己的人。</p>
+          <br><br>
+          <p>Trace 不是日记，它是你的认知黑匣子。</p>
+          <p>没有社交，没有点赞，不需要排版。</p>
+          <p>系统静默抓取你的情绪锚点、打字停顿与删改摩擦。</p>
+          <p>它偶尔会说中你。</p>
+          <br><br>
+          <p>准备好留下第一道印迹了吗？</p>
         </div>
         <div class="action-shell">
-          <button id="enter-writing-btn" class="primary-action-btn" type="button">→ 开始记录</button>
+          <button id="enter-writing-btn" class="primary-action-btn" type="button">→ 开启显影</button>
         </div>
       </section>
 
@@ -81,9 +77,12 @@
 
       <aside id="history-panel" class="history-panel hidden" aria-hidden="true">
         <div class="history-header">
-          <h2>系统记录</h2>
+          <h2>认知拓扑</h2>
           <button id="close-history-btn" class="close-btn" type="button">返回</button>
         </div>
+        
+        <div id="history-pattern-layer" class="history-pattern-layer empty"></div>
+        
         <div class="history-list" id="history-list"></div>
       </aside>
     </main>
@@ -92,10 +91,10 @@
       <article class="history-item">
         <div class="history-meta">
           <time class="history-time"></time>
+          <span class="history-metadata hidden"></span>
           <span class="history-friction hidden"></span>
         </div>
         <p class="history-raw-text"></p>
-        <div class="history-metadata hidden"></div>
       </article>
     </template>
 
