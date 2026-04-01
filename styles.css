@@ -12,10 +12,10 @@
   --font-writing: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
   --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   --active-writing-font: var(--font-ui);
-  --trace-mark-color: rgba(23, 23, 23, 0.7);
-  --trace-mark-opacity: 0.8;
-  --trace-wordmark-color: rgba(23, 23, 23, 0.82);
-  --trace-wordmark-opacity: 0.72;
+  --trace-mark-color: rgba(23, 23, 23, 0.66);
+  --trace-mark-opacity: 0.74;
+  --trace-wordmark-color: rgba(23, 23, 23, 0.76);
+  --trace-wordmark-opacity: 0.64;
 }
 
 body.time-morning { --bg-color: #f0f4f8; } 
@@ -31,10 +31,10 @@ body.time-night {
   --paper-bg: rgba(17,24,39,0.54);
   --paper-shadow: 0 22px 60px rgba(0, 0, 0, 0.3);
   --paper-border: rgba(255,255,255,0.04);
-  --trace-mark-color: rgba(229, 231, 235, 0.82);
-  --trace-mark-opacity: 0.72;
-  --trace-wordmark-color: rgba(229, 231, 235, 0.8);
-  --trace-wordmark-opacity: 0.62;
+  --trace-mark-color: rgba(233, 236, 240, 0.86);
+  --trace-mark-opacity: 0.66;
+  --trace-wordmark-color: rgba(233, 236, 240, 0.8);
+  --trace-wordmark-opacity: 0.56;
 }
 
 body[data-font-style="writing"] { --active-writing-font: var(--font-writing); }
@@ -120,22 +120,19 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   top: 28px;
   left: 50%;
   z-index: 28;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.trace-loading-identity {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  opacity: 0.74;
+  gap: 9px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  opacity: 0.7;
 }
 
 .trace-loading-label {
   color: var(--text-ghost);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   letter-spacing: 0.12em;
-  opacity: 0.76;
+  opacity: 0.7;
 }
 
 .trace-logo {
@@ -156,43 +153,42 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  opacity: 0.92;
+  gap: 4px;
 }
 
 .trace-identity--hero {
-  --trace-mark-opacity: 0.75;
-  --trace-wordmark-opacity: 0.62;
-  margin-bottom: 16px;
+  --trace-mark-opacity: 0.69;
+  --trace-wordmark-opacity: 0.58;
+  margin-bottom: 15px;
 }
 
 .trace-identity--unlock {
-  --trace-mark-opacity: 0.64;
-  --trace-wordmark-opacity: 0.5;
-  margin-bottom: 7px;
+  --trace-mark-opacity: 0.58;
+  --trace-wordmark-opacity: 0.44;
+  margin-bottom: 8px;
   gap: 3px;
-  opacity: 0.76;
 }
 
 .trace-logo--hero {
-  width: min(174px, 40vw);
+  width: min(168px, 38vw);
   aspect-ratio: 1;
 }
 
 .trace-logo--unlock {
-  width: 132px;
+  width: 124px;
   aspect-ratio: 1;
 }
 
 .trace-logo--mark {
   width: 32px;
   aspect-ratio: 1;
+  --trace-mark-opacity: 0.56;
 }
 
 .trace-logo--loading {
-  width: 28px;
+  width: 26px;
   aspect-ratio: 1;
-  opacity: 0.62;
+  --trace-mark-opacity: 0.52;
 }
 
 .trace-wordmark {
@@ -200,19 +196,19 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   color: var(--trace-wordmark-color);
   font-size: clamp(1.9rem, 3.35vw, 2.8rem);
   line-height: 1;
-  font-weight: 500;
+  font-weight: 480;
   letter-spacing: -0.04em;
   opacity: var(--trace-wordmark-opacity);
 }
 
 .trace-wordmark--identity {
-  font-size: clamp(1.78rem, 3vw, 2.42rem);
-  font-weight: 470;
+  font-size: clamp(1.74rem, 2.88vw, 2.34rem);
+  font-weight: 455;
   letter-spacing: -0.038em;
 }
 
 .trace-identity--unlock .trace-wordmark--identity {
-  font-size: clamp(1.54rem, 2.64vw, 2.08rem);
+  font-size: clamp(1.48rem, 2.48vw, 1.98rem);
 }
 
 .trace-loading.is-active .trace-logo--loading .trace-logo-path,
@@ -824,7 +820,6 @@ body.listening-mode .status-indicator {
   .history-panel { width: 100vw; border-left: none; }
   #global-tools { top: 18px; right: 18px; gap: 10px; padding: 7px 9px; }
   .trace-loading { top: 18px; max-width: calc(100vw - 32px); }
-  .trace-loading-identity { gap: 8px; }
   .threshold-shell { min-height: 58vh; }
   .threshold-line { max-width: 16ch; font-size: 1.16rem; }
   .writing-card { min-height: calc(100vh - 150px); padding: 28px 22px 20px; border-radius: 26px; }
