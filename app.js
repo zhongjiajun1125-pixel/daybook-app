@@ -17,6 +17,10 @@ const SYSTEM_STATE_KEY = "trace_system_v1";
 const PREDICTION_STATE_KEY = "trace_prediction_v1";
 const ENCRYPTION_SALT_KEY = "trace-pin-salt";
 const VAULT_HANDLE_KEY = "trace-vault-handle";
+const TRACE_LOGO_ASSETS = Object.freeze({
+  light: "./trace-logo-black.png",
+  dark: "./trace-logo-white.png",
+});
 
 let audioCtx = null;
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -2820,11 +2824,24 @@ function syncThemeColor(themeClass) {
   });
 }
 
+function syncTraceLogos(themeClass) {
+  const nextSrc = themeClass === "time-night" ? TRACE_LOGO_ASSETS.dark : TRACE_LOGO_ASSETS.light;
+
+  document.querySelectorAll(".trace-logo[data-light-src][data-dark-src]").forEach((node) => {
+    const preferred = themeClass === "time-night" ? node.dataset.darkSrc : node.dataset.lightSrc;
+    const src = preferred || nextSrc;
+    if (node.getAttribute("src") !== src) {
+      node.setAttribute("src", src);
+    }
+  });
+}
+
 function setAmbientLight(date = new Date()) {
   const nextClass = resolveAmbientClass(date);
   document.body.classList.remove("time-morning", "time-day", "time-noon", "time-night");
   document.body.classList.add(nextClass);
   syncThemeColor(nextClass);
+  syncTraceLogos(nextClass);
 }
 
 function findMostFrequent(values) {

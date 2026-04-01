@@ -8,8 +8,8 @@
   "description": "纯本地的记录空间",
   "icons": [
     {
-      "src": "./image.png",
-      "sizes": "512x512",
+      "src": "./trace-logo-black.png",
+      "sizes": "254x259",
       "type": "image/png"
     }
   ]

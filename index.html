@@ -11,9 +11,9 @@
     
     <title>Trace</title>
     
-    <link rel="manifest" href="./manifest.json?v=20260401-5">
-    <link rel="icon" href="./image.png">
-    <link rel="apple-touch-icon" href="./image.png">
+    <link rel="manifest" href="./manifest.json?v=20260402-1">
+    <link rel="icon" href="./trace-logo-black.png">
+    <link rel="apple-touch-icon" href="./trace-logo-black.png">
     
     <link rel="stylesheet" href="./styles.css?v=20260401-2" />
     <script>
@@ -38,9 +38,17 @@
     </nav>
 
     <div id="trace-loading" class="trace-loading hidden" aria-live="polite" aria-atomic="true">
-      <svg id="trace-loading-mark" class="trace-logo trace-logo--loading" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path class="trace-logo-path" d="M150 100 C150 140, 110 170, 70 150 C40 135, 30 95, 50 70 C70 45, 110 45, 135 70" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+      <img
+        id="trace-loading-mark"
+        class="trace-logo trace-logo--loading"
+        src="./trace-logo-black.png"
+        data-light-src="./trace-logo-black.png"
+        data-dark-src="./trace-logo-white.png"
+        alt=""
+        width="254"
+        height="259"
+        aria-hidden="true"
+      />
       <span id="trace-loading-label" class="trace-loading-label">正在进入…</span>
     </div>
 
@@ -49,9 +57,17 @@
       <section id="unlock-view" class="view-section unlock-view hidden">
         <div class="unlock-shell">
           <div class="trace-identity trace-identity--unlock">
-            <svg id="unlock-trace-mark" class="trace-logo trace-logo--unlock" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path class="trace-logo-path" d="M150 100 C150 140, 110 170, 70 150 C40 135, 30 95, 50 70 C70 45, 110 45, 135 70" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <img
+              id="unlock-trace-mark"
+              class="trace-logo trace-logo--unlock"
+              src="./trace-logo-black.png"
+              data-light-src="./trace-logo-black.png"
+              data-dark-src="./trace-logo-white.png"
+              alt=""
+              width="254"
+              height="259"
+              aria-hidden="true"
+            />
             <span class="trace-wordmark trace-wordmark--identity">Trace</span>
           </div>
           <p id="unlock-title" class="unlock-title">输入密码</p>
@@ -75,9 +91,17 @@
       <section id="onboarding-view" class="view-section active">
         <div class="threshold-shell">
           <div class="trace-identity trace-identity--hero">
-            <svg id="onboarding-trace-mark" class="trace-logo trace-logo--hero" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path class="trace-logo-path" d="M150 100 C150 140, 110 170, 70 150 C40 135, 30 95, 50 70 C70 45, 110 45, 135 70" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <img
+              id="onboarding-trace-mark"
+              class="trace-logo trace-logo--hero"
+              src="./trace-logo-black.png"
+              data-light-src="./trace-logo-black.png"
+              data-dark-src="./trace-logo-white.png"
+              alt=""
+              width="254"
+              height="259"
+              aria-hidden="true"
+            />
             <span class="trace-wordmark trace-wordmark--identity">Trace</span>
           </div>
           <p id="threshold-line" class="threshold-line">Not everything needs to be said.</p>
@@ -102,9 +126,17 @@
           <article class="writing-card">
             <div class="paper-header">
               <div class="paper-presence">
-                <svg id="compose-trace-mark" class="trace-logo trace-logo--mark" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                  <path class="trace-logo-path" d="M150 100 C150 140, 110 170, 70 150 C40 135, 30 95, 50 70 C70 45, 110 45, 135 70" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+                <img
+                  id="compose-trace-mark"
+                  class="trace-logo trace-logo--mark"
+                  src="./trace-logo-black.png"
+                  data-light-src="./trace-logo-black.png"
+                  data-dark-src="./trace-logo-white.png"
+                  alt=""
+                  width="254"
+                  height="259"
+                  aria-hidden="true"
+                />
                 <span class="paper-kicker">现在</span>
               </div>
               <span id="font-style-label" class="paper-meta">默认</span>
@@ -177,6 +209,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260401-8"></script>
+    <script src="./app.js?v=20260402-1"></script>
   </body>
 </html>

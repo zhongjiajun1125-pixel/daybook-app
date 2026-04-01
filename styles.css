@@ -137,15 +137,13 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 
 .trace-logo {
   display: block;
-  overflow: visible;
-  color: var(--trace-mark-color);
   opacity: var(--trace-mark-opacity);
-}
-
-.trace-logo-path {
-  stroke: currentColor;
-  vector-effect: non-scaling-stroke;
-  transition: opacity 0.24s ease;
+  object-fit: contain;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+  transform-origin: center;
+  transition: opacity 0.26s ease, transform 0.38s cubic-bezier(0.22, 0.8, 0.24, 1);
 }
 
 .trace-identity {
@@ -171,23 +169,19 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 
 .trace-logo--hero {
   width: min(168px, 38vw);
-  aspect-ratio: 1;
 }
 
 .trace-logo--unlock {
   width: 124px;
-  aspect-ratio: 1;
 }
 
 .trace-logo--mark {
   width: 32px;
-  aspect-ratio: 1;
   --trace-mark-opacity: 0.56;
 }
 
 .trace-logo--loading {
   width: 26px;
-  aspect-ratio: 1;
   --trace-mark-opacity: 0.52;
 }
 
@@ -211,17 +205,17 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   font-size: clamp(1.48rem, 2.48vw, 1.98rem);
 }
 
-.trace-loading.is-active .trace-logo--loading .trace-logo-path,
-.trace-logo.is-loading .trace-logo-path {
-  animation: traceStrokeLoading 1.3s cubic-bezier(0.22, 0.8, 0.24, 1) infinite;
+.trace-loading.is-active .trace-logo--loading,
+.trace-logo.is-loading {
+  animation: traceLogoLoading 1.3s cubic-bezier(0.22, 0.8, 0.24, 1) infinite;
 }
 
-.trace-logo.is-sealing .trace-logo-path {
-  animation: traceStrokeSeal 0.92s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.trace-logo.is-sealing {
+  animation: traceLogoSeal 0.92s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.trace-logo.is-echo .trace-logo-path {
-  animation: traceStrokeEcho 0.72s ease-out forwards;
+.trace-logo.is-echo {
+  animation: traceLogoEcho 0.72s ease-out forwards;
 }
 
 .threshold-shell {
@@ -761,56 +755,49 @@ body.listening-mode .status-indicator {
   50% { opacity: 0.8; }
 }
 
-@keyframes traceStrokeLoading {
+@keyframes traceLogoLoading {
   0% {
-    opacity: 0.16;
-    stroke-dasharray: 0 260;
-    stroke-dashoffset: 10;
+    opacity: 0.2;
+    transform: scale(0.986);
   }
   60% {
-    opacity: 0.82;
-    stroke-dasharray: 208 260;
-    stroke-dashoffset: 0;
+    opacity: 0.7;
+    transform: scale(1);
   }
   100% {
-    opacity: 0.34;
-    stroke-dasharray: 168 260;
-    stroke-dashoffset: -18;
+    opacity: 0.3;
+    transform: scale(0.992);
   }
 }
 
-@keyframes traceStrokeSeal {
+@keyframes traceLogoSeal {
   0% {
-    opacity: 0.24;
-    stroke-dasharray: 0 260;
-    stroke-dashoffset: 0;
+    opacity: 0.18;
+    transform: scale(0.972);
   }
   100% {
-    opacity: 0.92;
-    stroke-dasharray: 214 260;
-    stroke-dashoffset: -8;
+    opacity: 0.86;
+    transform: scale(1);
   }
 }
 
-@keyframes traceStrokeEcho {
+@keyframes traceLogoEcho {
   0% {
-    opacity: 1;
-    stroke-dasharray: 214 260;
-    stroke-dashoffset: -8;
+    opacity: 0.78;
+    transform: scale(1);
   }
   100% {
     opacity: 0;
-    stroke-dasharray: 232 260;
-    stroke-dashoffset: -24;
+    transform: scale(1.055);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .trace-logo-path,
-  .trace-logo.is-loading .trace-logo-path,
-  .trace-logo.is-sealing .trace-logo-path,
-  .trace-logo.is-echo .trace-logo-path,
-  .trace-loading.is-active .trace-logo--loading .trace-logo-path {
+  .trace-logo,
+  .trace-logo.is-loading,
+  .trace-logo.is-sealing,
+  .trace-logo.is-echo,
+  .trace-loading.is-active .trace-logo--loading {
     animation: none !important;
   }
 }
