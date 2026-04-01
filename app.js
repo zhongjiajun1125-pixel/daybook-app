@@ -799,37 +799,47 @@ async function handleUnlock() {
   syncUnlockLabel("active");
 
   try {
-    if (state.bioEnrolled && !window.localStorage.getItem(BIO_CRED_KEY)) {
+    const hasCredential = Boolean(window.localStorage.getItem(BIO_CRED_KEY));
+
+    if (state.bioEnrolled && !hasCredential) {
       state.bioEnrolled = false;
       window.localStorage.removeItem(BIO_KEY);
     }
 
-    if (!state.bioEnrolled) {
-      if (!state.pinEnabled) {
-        await fallbackToPin();
-        return;
-      }
-
-      if (!LocalBio.isSupported()) {
-        await fallbackToPin();
-        return;
-      }
-
-      await LocalBio.enroll();
-      state.bioEnrolled = true;
-      window.localStorage.setItem(BIO_KEY, "1");
-    } else {
-      if (!LocalBio.isSupported()) {
-        await fallbackToPin();
-        return;
-      }
-      await LocalBio.verify();
+    if (!state.bioEnrolled && !state.pinEnabled) {
+      await bootSystem();
+      return;
     }
 
+    if (!state.bioEnrolled) {
+      await fallbackToPin();
+      return;
+    }
+
+    if (!LocalBio.isSupported() || !hasCredential) {
+      if (state.pinEnabled) {
+        await fallbackToPin();
+        return;
+      }
+
+      state.bioEnrolled = false;
+      window.localStorage.removeItem(BIO_KEY);
+      await bootSystem();
+      return;
+    }
+
+    await LocalBio.verify();
     await completeUnlock();
   } catch (error) {
     console.error("Bio Auth Failed:", error);
-    await fallbackToPin();
+    if (state.pinEnabled) {
+      await fallbackToPin();
+      return;
+    }
+
+    state.bioEnrolled = false;
+    window.localStorage.removeItem(BIO_KEY);
+    await bootSystem();
   }
 }
 
