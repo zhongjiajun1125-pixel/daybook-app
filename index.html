@@ -45,8 +45,19 @@
           </div>
           <p id="unlock-title" class="unlock-title">解锁</p>
           <p id="unlock-subtitle" class="unlock-subtitle">输入 PIN 或继续</p>
+          <div class="unlock-profile">
+            <div id="profile-avatar" class="profile-avatar" aria-hidden="true">你</div>
+            <div class="profile-fields">
+              <input id="profile-name-input" class="profile-name-input" type="text" maxlength="24" placeholder="给自己取个名字" />
+              <p class="profile-hint">只保存在这台设备上</p>
+            </div>
+          </div>
           <button id="unlock-btn" class="unlock-btn" type="button">继续</button>
           <button id="unlock-secondary-btn" class="unlock-secondary-btn" type="button">开启密码</button>
+          <div id="unlock-manage-actions" class="unlock-manage-actions hidden">
+            <button id="change-pin-btn" class="unlock-secondary-btn" type="button">修改密码</button>
+            <button id="disable-pin-btn" class="unlock-secondary-btn" type="button">关闭密码</button>
+          </div>
           <div id="pin-panel" class="pin-panel hidden">
             <input
               id="pin-input"

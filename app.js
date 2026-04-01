@@ -8,6 +8,7 @@ const STORE_NAME = "entries";
 const DRAFT_KEY = "trace-draft-v1";
 const LAST_ACTIVE_KEY = "trace-last-active";
 const FONT_STYLE_KEY = "trace-font-style";
+const PROFILE_NAME_KEY = "trace-profile-name";
 const BIO_KEY = "trace-bio-enrolled";
 const BIO_CRED_KEY = "trace-bio-cred-id";
 const PIN_HASH_KEY = "trace-pin-hash";
@@ -177,8 +178,13 @@ const elements = {
   unlockBtn: document.getElementById("unlock-btn"),
   unlockTitle: document.getElementById("unlock-title"),
   unlockSubtitle: document.getElementById("unlock-subtitle"),
+  profileAvatar: document.getElementById("profile-avatar"),
+  profileNameInput: document.getElementById("profile-name-input"),
   pinPanel: document.getElementById("pin-panel"),
   unlockSecondaryBtn: document.getElementById("unlock-secondary-btn"),
+  unlockManageActions: document.getElementById("unlock-manage-actions"),
+  changePinBtn: document.getElementById("change-pin-btn"),
+  disablePinBtn: document.getElementById("disable-pin-btn"),
   pinInput: document.getElementById("pin-input"),
   pinSubmitBtn: document.getElementById("pin-submit-btn"),
   pinCancelBtn: document.getElementById("pin-cancel-btn"),
@@ -220,6 +226,7 @@ let state = {
   isLoaded: false,
   activeAnchor: null,
   fontStyle: window.localStorage.getItem(FONT_STYLE_KEY) || "system",
+  profileName: window.localStorage.getItem(PROFILE_NAME_KEY) || "",
   bioEnrolled: window.localStorage.getItem(BIO_KEY) === "1",
   pinEnabled: Boolean(window.localStorage.getItem(PIN_HASH_KEY)),
   accessMode: "choice",
@@ -481,7 +488,7 @@ const AIEngine = {
   composeResponse(interpretation, memory) {
     if (!interpretation.should_echo) {
       return {
-        echo: "",
+        echo: buildFallbackEcho(interpretation, memory),
         question: "",
         pattern_hint: "",
       };
@@ -500,6 +507,22 @@ const AIEngine = {
     };
   },
 };
+
+function buildFallbackEcho(interpretation, memory) {
+  if (interpretation.topic_entities[0]) {
+    return `你刚刚留下的，靠近「${interpretation.topic_entities[0]}」。`;
+  }
+
+  if (interpretation.surface_emotion && interpretation.surface_emotion !== "平静") {
+    return `这段话里，隐约带着一点「${interpretation.surface_emotion}」。`;
+  }
+
+  if (memory.openLoops[0]) {
+    return memory.openLoops[0];
+  }
+
+  return "你刚刚留下了一段此刻。";
+}
 
 const MemoryEngine = {
   build(entries, currentEntry) {
@@ -578,6 +601,30 @@ function resetLegacyBioState() {
     state.bioEnrolled = false;
     window.localStorage.removeItem(BIO_KEY);
   }
+}
+
+function resolveProfileInitial(name) {
+  const clean = (name || "").trim();
+  if (!clean) return "你";
+  return Array.from(clean)[0];
+}
+
+function syncProfileUI() {
+  const name = (state.profileName || "").trim();
+
+  if (elements.profileNameInput && elements.profileNameInput.value !== name) {
+    elements.profileNameInput.value = name;
+  }
+
+  if (elements.profileAvatar) {
+    elements.profileAvatar.textContent = resolveProfileInitial(name);
+  }
+}
+
+function saveProfileName(name) {
+  state.profileName = (name || "").trim();
+  window.localStorage.setItem(PROFILE_NAME_KEY, state.profileName);
+  syncProfileUI();
 }
 
 function setStatusMessage(text = "", timeout = 0) {
@@ -731,13 +778,15 @@ function renderAccessView(status = "idle", customSubtitle = "") {
   const subtitle = elements.unlockSubtitle;
   const primary = elements.unlockBtn;
   const secondary = elements.unlockSecondaryBtn;
+  const manageActions = elements.unlockManageActions;
   const pinSubmit = elements.pinSubmitBtn;
   const pinCancel = elements.pinCancelBtn;
 
-  if (!title || !subtitle || !primary || !secondary || !pinSubmit || !pinCancel) return;
+  if (!title || !subtitle || !primary || !secondary || !pinSubmit || !pinCancel || !manageActions) return;
 
   primary.classList.remove("hidden");
   secondary.classList.remove("hidden");
+  manageActions.classList.add("hidden");
   showPinPanel(false);
 
   if (status === "active") {
@@ -752,9 +801,9 @@ function renderAccessView(status = "idle", customSubtitle = "") {
     subtitle.textContent = "已进入";
   }
 
-  if (state.accessMode === "setup") {
-    title.textContent = "开启密码";
-    subtitle.textContent = customSubtitle || "设置 4 到 6 位数字";
+  if (state.accessMode === "setup" || state.accessMode === "resetPin") {
+    title.textContent = state.accessMode === "resetPin" ? "修改密码" : "开启密码";
+    subtitle.textContent = customSubtitle || (state.accessMode === "resetPin" ? "输入新的 4 到 6 位数字" : "设置 4 到 6 位数字");
     primary.classList.add("hidden");
     secondary.classList.add("hidden");
     pinSubmit.textContent = "保存并进入";
@@ -772,6 +821,7 @@ function renderAccessView(status = "idle", customSubtitle = "") {
     subtitle.textContent = customSubtitle || (status === "active" ? "正在验证…" : "这台设备已开启本地保护");
     primary.classList.add("hidden");
     secondary.classList.add("hidden");
+    manageActions.classList.remove("hidden");
     pinSubmit.textContent = "进入";
     pinCancel.textContent = "清空";
     showPinPanel(true);
@@ -825,7 +875,9 @@ async function handlePinSubmit() {
   renderAccessView("active");
 
   try {
-    if (!state.pinEnabled || state.accessMode === "setup") {
+    if (state.accessMode === "resetPin") {
+      await LocalPin.enroll(pin);
+    } else if (!state.pinEnabled || state.accessMode === "setup") {
       await LocalPin.enroll(pin);
     } else {
       await LocalPin.verify(pin);
@@ -845,9 +897,49 @@ async function handlePinSubmit() {
 function init() {
   resetLegacyBioState();
   state.accessMode = state.pinEnabled ? "verify" : "choice";
+  syncProfileUI();
   renderAccessView("idle");
   initVoiceRecognition();
   bindEvents();
+}
+
+async function handleDisablePin() {
+  const currentPin = elements.pinInput?.value.trim() || "";
+  if (!/^\d{4,6}$/.test(currentPin)) {
+    renderAccessView("failed", "先输入当前 PIN");
+    return;
+  }
+
+  try {
+    await LocalPin.verify(currentPin);
+    window.localStorage.removeItem(PIN_HASH_KEY);
+    window.localStorage.removeItem(BIO_KEY);
+    window.localStorage.removeItem(BIO_CRED_KEY);
+    state.pinEnabled = false;
+    state.bioEnrolled = false;
+    state.accessMode = "choice";
+    if (elements.pinInput) elements.pinInput.value = "";
+    renderAccessView("idle", "密码已关闭");
+  } catch {
+    renderAccessView("failed", "PIN 不正确");
+  }
+}
+
+async function handleChangePin() {
+  const currentPin = elements.pinInput?.value.trim() || "";
+  if (!/^\d{4,6}$/.test(currentPin)) {
+    renderAccessView("failed", "先输入当前 PIN");
+    return;
+  }
+
+  try {
+    await LocalPin.verify(currentPin);
+    state.accessMode = "resetPin";
+    if (elements.pinInput) elements.pinInput.value = "";
+    renderAccessView("idle", "输入新的 4 到 6 位数字");
+  } catch {
+    renderAccessView("failed", "PIN 不正确");
+  }
 }
 
 function bindEvents() {
@@ -967,11 +1059,25 @@ function bindEvents() {
     elements.importInput.addEventListener("change", importEntries);
   }
 
+  if (elements.profileNameInput) {
+    elements.profileNameInput.addEventListener("input", (event) => {
+      saveProfileName(event.target.value);
+    });
+  }
+
   if (elements.unlockSecondaryBtn) {
     elements.unlockSecondaryBtn.addEventListener("click", () => {
       state.accessMode = "setup";
       renderAccessView("idle");
     });
+  }
+
+  if (elements.changePinBtn) {
+    elements.changePinBtn.addEventListener("click", handleChangePin);
+  }
+
+  if (elements.disablePinBtn) {
+    elements.disablePinBtn.addEventListener("click", handleDisablePin);
   }
 
   document.addEventListener("keydown", (event) => {
@@ -1072,9 +1178,10 @@ async function submitEntry() {
     await silentAnalyze(entry);
     triggerSystemEcho();
 
-    if (entry.system?.echo) {
+    const echoPayload = buildEntryEchoCard(entry);
+    if (echoPayload) {
       window.setTimeout(() => {
-        showEchoCard(entry.system.echo);
+        showEchoCard(echoPayload);
       }, 360);
     } else {
       hideEchoCard(true);
@@ -1154,6 +1261,35 @@ function renderEchoBlock(response) {
     if (index > 0) line.style.marginTop = "8px";
     panel.appendChild(line);
   });
+}
+
+function buildEntryEchoCard(entry) {
+  if (entry.system?.echo) {
+    return entry.system.echo;
+  }
+
+  const response = entry.analysis?.response || {};
+  const pieces = [response.echo, response.question, response.pattern_hint].filter(Boolean);
+
+  if (pieces.length) {
+    return {
+      l1: pieces[0] || "",
+      l2: pieces[1] || "",
+      l3: pieces[2] || "",
+      level: 1,
+    };
+  }
+
+  if (entry.content) {
+    return {
+      l1: "你刚刚留下了一段话。",
+      l2: "它已经被收进这次记录里。",
+      l3: "",
+      level: 1,
+    };
+  }
+
+  return null;
 }
 
 async function silentAnalyze(entry) {
