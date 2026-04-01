@@ -138,8 +138,8 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   background-position: 50% 14%;
   background-color: transparent;
   mix-blend-mode: multiply;
-  filter: grayscale(1) contrast(0.88) brightness(0.96);
-  opacity: 0.82;
+  filter: grayscale(1) contrast(0.84) brightness(0.97);
+  opacity: 0.76;
 }
 
 .trace-logo-panel::after {
@@ -156,43 +156,36 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   pointer-events: none;
 }
 
-.trace-brand-lockup {
+.trace-identity {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  opacity: 0.96;
+  gap: 4px;
+  opacity: 0.94;
 }
 
-.trace-brand-lockup--hero {
-  margin-bottom: 22px;
+.trace-identity--hero {
+  margin-bottom: 18px;
 }
 
-.trace-brand-lockup--unlock {
-  margin-bottom: 14px;
+.trace-identity--unlock {
+  margin-bottom: 10px;
 }
 
 .trace-logo-panel--hero {
-  width: min(194px, 45vw);
+  width: min(184px, 43vw);
   aspect-ratio: 1;
 }
 
 .trace-logo-panel--unlock {
-  width: 170px;
+  width: 156px;
   aspect-ratio: 1;
 }
 
 .trace-logo-panel--mark {
   width: 32px;
   aspect-ratio: 1;
-}
-
-.trace-wordmark-wrap {
-  margin-top: 2px;
-}
-
-.trace-wordmark-wrap--unlock {
-  margin-top: 0;
 }
 
 .trace-wordmark {
@@ -202,7 +195,13 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   line-height: 1;
   font-weight: 500;
   letter-spacing: -0.04em;
-  opacity: 0.84;
+  opacity: 0.78;
+}
+
+.trace-wordmark--identity {
+  font-size: clamp(1.82rem, 3.12vw, 2.56rem);
+  font-weight: 490;
+  letter-spacing: -0.038em;
 }
 
 .trace-loading.is-active .trace-logo-panel--mark::after,
@@ -225,21 +224,22 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   justify-content: center;
   text-align: center;
   margin: 0 auto;
-  min-height: 64vh;
+  min-height: 62vh;
   animation: fadeIn 1.5s ease-out;
 }
 
 .threshold-line {
   color: var(--text-primary);
-  font-size: clamp(1.22rem, 1.8vw, 1.52rem);
-  font-weight: 470;
+  font-size: clamp(1.18rem, 1.7vw, 1.46rem);
+  font-weight: 460;
   letter-spacing: 0.01em;
   line-height: 1.42;
   max-width: 18ch;
+  opacity: 0.92;
 }
 
 .action-shell--threshold {
-  margin-top: 18px;
+  margin-top: 16px;
 }
 
 .primary-action-btn {
@@ -262,26 +262,23 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-align: center;
 }
 
-.unlock-orb {
-  margin-bottom: 6px;
-}
-
 .unlock-title {
-  margin-top: 4px;
-  font-size: 1.05rem;
+  margin-top: 2px;
+  font-size: 1rem;
   color: var(--text-primary);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
+  opacity: 0.9;
 }
 
 .unlock-subtitle {
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   color: var(--text-ghost);
-  letter-spacing: 0.06em;
-  max-width: 18rem;
+  letter-spacing: 0.04em;
+  max-width: 17rem;
 }
 
 .unlock-profile {
@@ -428,9 +425,9 @@ body.time-night .trace-logo-panel::after {
 }
 
 body.time-night .trace-logo-panel {
-  filter: invert(1) grayscale(1) contrast(0.84) brightness(0.9);
+  filter: invert(1) grayscale(1) contrast(0.78) brightness(0.88);
   mix-blend-mode: screen;
-  opacity: 0.74;
+  opacity: 0.68;
 }
 
 body.time-night .primary-action-btn {
