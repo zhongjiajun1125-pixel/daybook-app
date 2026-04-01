@@ -18,6 +18,7 @@
   <body class="time-day">
     <nav id="global-tools" class="hidden">
       <input type="file" id="import-file-input" accept=".json" style="display: none;" />
+      <button id="font-toggle-btn" class="ghost-btn" type="button">字体</button>
       <button id="import-data-btn" class="ghost-btn" type="button">导入</button>
       <button id="export-data-btn" class="ghost-btn" type="button">导出</button>
       <button id="history-toggle" class="ghost-btn" type="button">拓扑</button>
@@ -31,6 +32,7 @@
 
       <section id="onboarding-view" class="view-section hidden">
         <div class="narrative-shell">
+          <p class="eyebrow-text">TRACE / PERSONAL COGNITION SPACE</p>
           <p class="hero-text">给不想被打扰，但又隐约想看清自己的人。</p>
           <br><br>
           <p>Trace 不是日记，它是你的认知黑匣子。</p>
@@ -50,6 +52,10 @@
           <aside id="system-echo-panel" class="echo-panel empty" aria-live="polite"></aside>
 
           <article class="writing-card">
+            <div class="paper-header">
+              <span class="paper-kicker">此刻切片</span>
+              <span id="font-style-label" class="paper-meta">系统体</span>
+            </div>
             <textarea
               id="raw-memory-input"
               class="seamless-input"
@@ -67,7 +73,7 @@
 
           <div class="compose-footer">
             <span id="save-status" class="status-indicator"></span>
-            <div style="display: flex; gap: 24px;">
+            <div class="footer-actions">
               <button id="swallow-btn" class="subtle-submit-btn" type="button">吞噬</button>
               <button id="save-entry-btn" class="subtle-submit-btn" type="button">封存</button>
             </div>
