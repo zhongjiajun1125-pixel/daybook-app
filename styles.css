@@ -138,7 +138,8 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   background-position: 50% 14%;
   background-color: transparent;
   mix-blend-mode: multiply;
-  opacity: 0.94;
+  filter: grayscale(1) contrast(0.88) brightness(0.96);
+  opacity: 0.82;
 }
 
 .trace-logo-panel::after {
@@ -160,6 +161,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  opacity: 0.96;
 }
 
 .trace-brand-lockup--hero {
@@ -198,8 +200,9 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   color: var(--text-primary);
   font-size: clamp(1.9rem, 3.35vw, 2.8rem);
   line-height: 1;
-  font-weight: 510;
+  font-weight: 500;
   letter-spacing: -0.04em;
+  opacity: 0.84;
 }
 
 .trace-loading.is-active .trace-logo-panel--mark::after,
@@ -425,9 +428,9 @@ body.time-night .trace-logo-panel::after {
 }
 
 body.time-night .trace-logo-panel {
-  filter: invert(1);
+  filter: invert(1) grayscale(1) contrast(0.84) brightness(0.9);
   mix-blend-mode: screen;
-  opacity: 0.9;
+  opacity: 0.74;
 }
 
 body.time-night .primary-action-btn {
