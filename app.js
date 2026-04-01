@@ -8,6 +8,7 @@ const STORE_NAME = "entries";
 const DRAFT_KEY = "trace-draft-v1";
 const LAST_ACTIVE_KEY = "trace-last-active";
 const FONT_STYLE_KEY = "trace-font-style";
+const BIO_KEY = "trace-bio-enrolled";
 
 const SYSTEM_PROMPT_V1 = `
 你不是助手，不是心理医生，也不是安慰者。
@@ -65,6 +66,7 @@ let state = {
   isLoaded: false,
   activeAnchor: null,
   fontStyle: window.localStorage.getItem(FONT_STYLE_KEY) || "system",
+  bioEnrolled: window.localStorage.getItem(BIO_KEY) === "1",
 };
 
 let implicitSession = {
@@ -134,14 +136,14 @@ const RetentionSniper = {
     const hoursSince = (Date.now() - Number.parseInt(lastActive, 10)) / (1000 * 60 * 60);
 
     if (hoursSince > 96) {
-      return "你已经有一段时间没有回来。之前那条没有说完的线，还停在那里。";
+      return "你有几天没来了，上次写下的那件事还在这里。";
     }
 
     if (hoursSince > 48 && state.entries.length > 0) {
       const latest = state.entries[0];
       const latestQuestion = latest.analysis?.response?.question;
       if (latestQuestion) {
-        return `上一次留下的问题还在：${latestQuestion}`;
+        return `上次的问题还在：${latestQuestion}`;
       }
     }
 
@@ -307,21 +309,59 @@ async function bootSystem() {
   } catch (error) {
     health.lastError = error instanceof Error ? error.message : String(error);
     if (elements.unlockBtn) {
-      elements.unlockBtn.textContent = "系统核心启动失败";
+      elements.unlockBtn.textContent = "打开失败";
     }
   }
 }
 
+function getBioCopy() {
+  if (state.bioEnrolled) {
+    return {
+      idle: "面容解锁",
+      active: "识别中",
+      success: "已解锁",
+      failed: "解锁失败",
+    };
+  }
+
+  return {
+    idle: "启用解锁",
+    active: "设置中",
+    success: "已启用",
+    failed: "设置失败",
+  };
+}
+
+function syncUnlockLabel(status = "idle") {
+  if (!elements.unlockBtn) return;
+  const copy = getBioCopy();
+  elements.unlockBtn.textContent = copy[status] || copy.idle;
+}
+
+async function handleUnlock() {
+  syncUnlockLabel("active");
+
+  try {
+    if (!state.bioEnrolled) {
+      state.bioEnrolled = true;
+      window.localStorage.setItem(BIO_KEY, "1");
+    }
+
+    syncUnlockLabel("success");
+    window.setTimeout(bootSystem, 280);
+  } catch {
+    syncUnlockLabel("failed");
+  }
+}
+
 function init() {
+  syncUnlockLabel("idle");
   bindEvents();
 }
 
 function bindEvents() {
   if (elements.unlockBtn) {
-    elements.unlockBtn.addEventListener("click", async () => {
-      elements.unlockBtn.textContent = "解构成功";
-      window.setTimeout(bootSystem, 300);
-    });
+    elements.unlockBtn.addEventListener("click", handleUnlock);
   }
 
   if (elements.enterWritingBtn) {
@@ -439,7 +479,7 @@ async function submitEntry() {
   upsertStateEntry(entry);
   RetentionSniper.updateActivity();
 
-  elements.saveStatus.textContent = "已封存";
+  elements.saveStatus.textContent = "已保存";
   window.setTimeout(() => {
     elements.saveStatus.textContent = "";
   }, 1800);
@@ -523,9 +563,9 @@ function applyFontStyle(style) {
   window.localStorage.setItem(FONT_STYLE_KEY, style);
 
   const labels = {
-    system: "系统体",
-    writing: "书写体",
-    serif: "衬线体",
+    system: "默认",
+    writing: "柔和",
+    serif: "衬线",
   };
 
   if (elements.fontStyleLabel) {
@@ -543,7 +583,7 @@ function renderHistory() {
 
   if (!state.entries.length) {
     elements.historyList.innerHTML =
-      '<p style="text-align:center;margin-top:40px;opacity:.5;">还没有形成可回看的切片</p>';
+      '<p style="text-align:center;margin-top:40px;opacity:.5;">还没有记录</p>';
     return;
   }
 
@@ -581,10 +621,18 @@ function renderHistory() {
     }
 
     const textNode = node.querySelector(".history-raw-text");
-    const echo = entry.analysis?.response?.echo;
-    textNode.textContent = echo
-      ? `${entry.content || "[空白记录]"}\n\n${echo}`
-      : entry.content || "[空白记录]";
+    const echoNode = node.querySelector(".history-echo-text");
+    const secondaryNode = node.querySelector(".history-secondary");
+    textNode.textContent = entry.content || "[空白记录]";
+    const responseParts = [
+      entry.analysis?.response?.echo,
+      entry.analysis?.response?.question,
+      entry.analysis?.response?.pattern_hint,
+    ].filter(Boolean);
+    if (echoNode && secondaryNode && responseParts.length) {
+      echoNode.textContent = responseParts.join("\n");
+      secondaryNode.classList.remove("hidden");
+    }
 
     node.style.cursor = "pointer";
     node.addEventListener("click", () => loadEntryForEdit(entry.id));
@@ -672,9 +720,9 @@ function buildTopologySummary(entries) {
   const topEmotion = findMostFrequent(emotions);
   const topDefense = findMostFrequent(defenses);
 
-  if (topTopic) lines.push(`最近的主题中心偏向「${topTopic}」。`);
-  if (topEmotion && topEmotion !== "平静") lines.push(`近期底色更接近「${topEmotion}」。`);
-  if (topDefense && topDefense !== "直接表达") lines.push(`表达姿态里持续出现「${topDefense}」。`);
+  if (topTopic) lines.push(`你最近常写到「${topTopic}」。`);
+  if (topEmotion && topEmotion !== "平静") lines.push(`最近的情绪更接近「${topEmotion}」。`);
+  if (topDefense && topDefense !== "直接表达") lines.push(`你最近常常会先「${topDefense}」。`);
 
   const openLoop = collectOpenLoops(entries)[0];
   if (openLoop) lines.push(openLoop);
@@ -682,7 +730,7 @@ function buildTopologySummary(entries) {
   const repeatedQuestion = findMostFrequent(
     recent.map((entry) => entry.analysis?.response?.question).filter(Boolean),
   );
-  if (repeatedQuestion) lines.push(`系统反复逼近的问题是：${repeatedQuestion}`);
+  if (repeatedQuestion) lines.push(`最近反复出现的问题是：${repeatedQuestion}`);
 
   return lines.join("\n");
 }
@@ -694,12 +742,12 @@ function collectActivePatterns(entries) {
 
   const topTopic = findMostFrequent(topics);
   if (topTopic && topics.filter((topic) => topic === topTopic).length >= 2) {
-    patterns.push(`最近多次回到「${topTopic}」这个主题。`);
+    patterns.push(`最近几次都回到了「${topTopic}」。`);
   }
 
   const topEmotion = findMostFrequent(emotions);
   if (topEmotion && topEmotion !== "平静" && emotions.filter((emotion) => emotion === topEmotion).length >= 2) {
-    patterns.push(`情绪底色重复偏向「${topEmotion}」。`);
+    patterns.push(`「${topEmotion}」这种感觉最近反复出现。`);
   }
 
   return patterns;
@@ -710,11 +758,11 @@ function collectOpenLoops(entries) {
   const recentTexts = entries.slice(0, 6).map((entry) => entry.content || "");
 
   if (recentTexts.filter((text) => containsAny(text, ["开始", "准备", "打开", "重启"])).length >= 3) {
-    loops.push("最近几次记录都停在“开始之前”的位置。");
+    loops.push("你最近几次都停在“开始之前”。");
   }
 
   if (entries.slice(0, 6).filter((entry) => entry.context?.friction >= 8).length >= 3) {
-    loops.push("高摩擦表达连续出现，说明有个问题一直没被说透。");
+    loops.push("你最近几次写得都很费力，像是有件事还没说开。");
   }
 
   return loops;
@@ -724,13 +772,13 @@ function collectIdentityMemory(entries) {
   const identity = [];
   const allTopics = entries.flatMap((entry) => inferTopics(entry.content || "", entry));
   const topTopic = findMostFrequent(allTopics);
-  if (topTopic) identity.push(`长期主题经常回到「${topTopic}」。`);
+  if (topTopic) identity.push(`你常常会回到「${topTopic}」这件事。`);
 
   const frequentDefense = findMostFrequent(
     entries.map((entry) => inferDefenseSignal(entry.content || "", entry)).filter(Boolean),
   );
   if (frequentDefense && frequentDefense !== "直接表达") {
-    identity.push(`常见防御姿态偏向「${frequentDefense}」。`);
+    identity.push(`你习惯先用「${frequentDefense}」来保护自己。`);
   }
 
   return identity;
@@ -817,7 +865,7 @@ function inferCoreTension(text, entry, memory) {
   if (matchedPair) return matchedPair.label;
 
   if (entry.context?.friction >= 10 && entry.context?.durationSec >= 120) {
-    return "你不是没有内容，而是在和要不要把它说透这件事拉扯。";
+    return "你不是没话说，你是在犹豫要不要说透。";
   }
 
   if (memory.openLoops.length > 0 && containsAny(text, ["开始", "明天", "这次", "还是"])) {
@@ -825,19 +873,19 @@ function inferCoreTension(text, entry, memory) {
   }
 
   if (entry.metadata?.anchor === "焦滞") {
-    return "你能感觉到卡住，但还没有决定朝哪个方向动。";
+    return "你感觉到卡住了，但还没决定往哪走。";
   }
 
   if (entry.metadata?.anchor === "游离") {
-    return "注意力在漂，但真正的问题没有离开。";
+    return "你的注意力在飘，但问题还在。";
   }
 
   if (entry.metadata?.anchor === "澄明") {
-    return "你已经看见了一部分答案，但还没有决定要不要照着它行动。";
+    return "你已经看见一点答案了，只是还没开始动。";
   }
 
   if (entry.metadata?.anchor === "沉缩") {
-    return "你在向内收，但被压住的东西并没有真正消失。";
+    return "你在往里收，但那件事并没有过去。";
   }
 
   return "";
@@ -848,11 +896,11 @@ function inferPatternLink(topics, surfaceEmotion, memory) {
     memory.activePatterns.some((pattern) => pattern.includes(`「${topic}」`)),
   );
   if (topicMatch) {
-    return `这已经不是第一次回到「${topicMatch}」了。`;
+    return `你不是第一次写到「${topicMatch}」了。`;
   }
 
   if (surfaceEmotion !== "平静" && memory.activePatterns.some((pattern) => pattern.includes(`「${surfaceEmotion}」`))) {
-    return `这种「${surfaceEmotion}」的底色，最近已经连续出现。`;
+    return `这种「${surfaceEmotion}」的感觉，最近已经连续出现。`;
   }
 
   const openLoop = memory.openLoops[0];
@@ -881,35 +929,35 @@ function buildEcho(interpretation, memory) {
   }
 
   if (interpretation.defense_signal === "回避") {
-    return "你在描述问题之前，已经先把自己往后撤了一步。";
+    return "你在说问题之前，已经先往后退了一步。";
   }
 
   if (interpretation.surface_emotion !== "平静") {
-    return `这段话表面很克制，但底色更接近「${interpretation.surface_emotion}」。`;
+    return `这段话看起来很平静，但里面更像是「${interpretation.surface_emotion}」。`;
   }
 
   if (memory.longIdentityMemory[0]) {
     return memory.longIdentityMemory[0];
   }
 
-  return "你留下的不只是内容，还有当下的阻力和姿态。";
+  return "你写下的不只是内容，还有当时的状态。";
 }
 
 function buildQuestion(interpretation, memory) {
   if (interpretation.core_tension.includes("行动")) {
-    return "你在怕结果，还是在怕一旦开始就不能再退回去？";
+    return "你是在怕结果，还是怕一开始就停不下来？";
   }
 
   if (interpretation.defense_signal === "回避") {
-    return "你在绕开的，是事情本身，还是它会逼你承认的那部分现实？";
+    return "你在躲开的，是这件事本身，还是它背后的现实？";
   }
 
   if (interpretation.defense_signal === "压抑") {
-    return "如果不再维持表面的平稳，你最先会说出口的到底是什么？";
+    return "如果不再假装没事，你最想先说什么？";
   }
 
   if (interpretation.pattern_link || memory.openLoops.length) {
-    return "这一次和前几次相比，真正没有变化的部分是什么？";
+    return "和前几次比，真正没有变的是什么？";
   }
 
   if (interpretation.topic_entities.includes("关系")) {
@@ -917,10 +965,10 @@ function buildQuestion(interpretation, memory) {
   }
 
   if (interpretation.topic_entities.includes("工作")) {
-    return "这件事真正压住你的，是任务本身，还是它背后的评价？";
+    return "真正压住你的，是事情本身，还是别人会怎么看？";
   }
 
-  return "如果只留下最核心的一句，你真正想承认的是什么？";
+  return "如果只留下一句，你真正想承认的是什么？";
 }
 
 function runHealthChecks() {

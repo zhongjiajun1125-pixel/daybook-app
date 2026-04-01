@@ -67,8 +67,14 @@ button, textarea { font: inherit; outline: none; border: none; background: none;
 .hidden { display: none !important; }
 
 .app-shell {
-  position: relative; width: 100%; max-width: 640px; margin: 0 auto;
-  min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 24px;
+  position: relative;
+  width: min(100%, 680px);
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 28px 34px;
 }
 
 body.focus-mode #global-tools,
@@ -76,19 +82,35 @@ body.focus-mode .compose-footer { opacity: 0.15; transition: opacity 1.5s ease-o
 body:not(.focus-mode) #global-tools,
 body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s ease-in; }
 
-#global-tools { position: fixed; top: 32px; right: 32px; z-index: 10; display: flex; gap: 16px; }
+#global-tools {
+  position: fixed;
+  top: 28px;
+  right: 28px;
+  z-index: 10;
+  display: flex;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(14px);
+}
 .ghost-btn {
-  color: var(--text-ghost); font-size: 0.85rem; letter-spacing: 0.05em;
-  cursor: pointer; transition: color 0.3s ease, opacity 0.2s ease;
+  color: var(--text-ghost);
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: color 0.3s ease, opacity 0.2s ease;
+  opacity: 0.68;
 }
 .ghost-btn:hover { color: var(--text-primary); opacity: 1; }
 
 .narrative-shell {
   color: var(--text-secondary);
   font-size: 1.05rem;
-  margin-bottom: 48px;
+  margin-bottom: 56px;
   animation: fadeIn 1.5s ease-out;
-  max-width: 30rem;
+  max-width: 31rem;
 }
 .eyebrow-text {
   font-size: 0.75rem;
@@ -109,7 +131,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: 70vh;
+  min-height: 72vh;
   justify-content: center;
 }
 
@@ -126,7 +148,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   flex-grow: 1;
   display: flex;
   flex-direction: column;
-  padding: 26px 26px 18px;
+  padding: 28px 30px 20px;
   border: 1px solid var(--paper-border);
   border-radius: 32px;
   background: linear-gradient(180deg, rgba(255,255,255,0.72), var(--paper-bg));
@@ -177,7 +199,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   display: flex; justify-content: space-between; align-items: center; padding-top: 12px;
   border-top: 1px solid var(--border-light);
   color: var(--text-ghost); font-size: 0.85rem;
-  margin-top: 14px;
+  margin-top: 18px;
 }
 .subtle-submit-btn { color: var(--text-ghost); cursor: pointer; transition: color 0.2s ease; }
 .subtle-submit-btn:hover { color: var(--text-primary); }
@@ -213,22 +235,37 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 
 .history-list { display: flex; flex-direction: column; gap: 16px; }
 .history-item {
-  display: flex; flex-direction: column; gap: 8px; opacity: 0.9; transition: opacity 0.2s, background-color 0.2s ease;
+  display: flex; flex-direction: column; gap: 10px; opacity: 0.9; transition: opacity 0.2s, background-color 0.2s ease;
   padding: 14px 15px; border-radius: 18px; background: rgba(255,255,255,0.02);
   border: 1px solid var(--border-light);
 }
 .history-item:hover { opacity: 1; }
+.history-primary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history-secondary {
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-light);
+}
 .history-meta { display: flex; gap: 12px; align-items: center; }
 .history-time { font-size: 0.8rem; color: var(--text-ghost); font-family: monospace; }
 .history-metadata { font-size: 0.75rem; color: var(--text-primary); font-weight: 500;}
 .history-friction { font-size: 0.7rem; color: var(--text-ghost); background: var(--accent-friction); padding: 2px 6px; border-radius: 4px;}
 
 .history-raw-text { 
-  font-size: 0.95rem; color: var(--text-secondary); line-height: 1.7; margin-top: 2px;
+  font-size: 0.98rem;
+  color: var(--text-primary);
+  line-height: 1.75;
   white-space: pre-line;
-  display: block;
-  overflow: visible;
-  text-overflow: unset;
+}
+.history-echo-text {
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  white-space: pre-line;
+  font-family: var(--font-serif);
 }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -246,8 +283,9 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 @media (max-width: 600px) {
   .seamless-input { font-size: 1.2rem; }
   .history-panel { width: 100vw; border-left: none; }
-  #global-tools { top: 24px; right: 24px; }
+  #global-tools { top: 18px; right: 18px; gap: 10px; padding: 7px 9px; }
   .writing-card { padding: 22px 18px 16px; border-radius: 26px; }
   .compose-shell { min-height: calc(100vh - 48px); }
   .footer-actions { gap: 18px; }
+  .app-shell { padding: 34px 18px 22px; }
 }
