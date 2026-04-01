@@ -38,7 +38,9 @@
     </nav>
 
     <div id="trace-loading" class="trace-loading hidden" aria-live="polite" aria-atomic="true">
-      <div id="trace-loading-mark" class="trace-logo-panel trace-logo-panel--mark"></div>
+      <svg id="trace-loading-mark" class="trace-logo trace-logo--mark" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path class="trace-logo-path" d="M150 100 C150 140, 110 170, 70 150 C40 135, 30 95, 50 70 C70 45, 110 45, 135 70" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
       <span id="trace-loading-label" class="trace-loading-label">正在进入…</span>
     </div>
 
@@ -47,25 +49,14 @@
       <section id="unlock-view" class="view-section unlock-view hidden">
         <div class="unlock-shell">
           <div class="trace-identity trace-identity--unlock">
-            <div id="unlock-trace-mark" class="trace-logo-panel trace-logo-panel--unlock"></div>
+            <svg id="unlock-trace-mark" class="trace-logo trace-logo--unlock" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path class="trace-logo-path" d="M150 100 C150 140, 110 170, 70 150 C40 135, 30 95, 50 70 C70 45, 110 45, 135 70" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
             <span class="trace-wordmark trace-wordmark--identity">Trace</span>
           </div>
-          <p id="unlock-title" class="unlock-title">解锁</p>
-          <p id="unlock-subtitle" class="unlock-subtitle">输入 PIN 或继续</p>
-          <div class="unlock-profile">
-            <div id="profile-avatar" class="profile-avatar" aria-hidden="true">你</div>
-            <div class="profile-fields">
-              <input id="profile-name-input" class="profile-name-input" type="text" maxlength="24" placeholder="给自己取个名字" />
-              <p class="profile-hint">只保存在这台设备上</p>
-            </div>
-          </div>
-          <button id="unlock-btn" class="unlock-btn" type="button">继续</button>
-          <button id="unlock-secondary-btn" class="unlock-secondary-btn" type="button">开启密码</button>
-          <div id="unlock-manage-actions" class="unlock-manage-actions hidden">
-            <button id="change-pin-btn" class="unlock-secondary-btn" type="button">修改密码</button>
-            <button id="disable-pin-btn" class="unlock-secondary-btn" type="button">关闭密码</button>
-          </div>
-          <div id="pin-panel" class="pin-panel hidden">
+          <p id="unlock-title" class="unlock-title">输入密码</p>
+          <p id="unlock-subtitle" class="unlock-subtitle">本地保护已开启</p>
+          <div id="pin-panel" class="pin-panel">
             <input
               id="pin-input"
               class="pin-input"
@@ -76,18 +67,17 @@
               autocomplete="off"
               placeholder="输入 PIN"
             />
-            <div class="pin-actions">
-              <button id="pin-submit-btn" class="pin-action-btn" type="button">确认</button>
-              <button id="pin-cancel-btn" class="pin-action-btn" type="button">返回</button>
-            </div>
           </div>
+          <button id="unlock-btn" class="unlock-btn unlock-btn--primary" type="button">进入</button>
         </div>
       </section>
 
       <section id="onboarding-view" class="view-section active">
         <div class="threshold-shell">
           <div class="trace-identity trace-identity--hero">
-            <div id="onboarding-trace-mark" class="trace-logo-panel trace-logo-panel--hero"></div>
+            <svg id="onboarding-trace-mark" class="trace-logo trace-logo--hero" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path class="trace-logo-path" d="M150 100 C150 140, 110 170, 70 150 C40 135, 30 95, 50 70 C70 45, 110 45, 135 70" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
             <span class="trace-wordmark trace-wordmark--identity">Trace</span>
           </div>
           <p id="threshold-line" class="threshold-line">Not everything needs to be said.</p>
@@ -112,7 +102,9 @@
           <article class="writing-card">
             <div class="paper-header">
               <div class="paper-presence">
-                <div id="compose-trace-mark" class="trace-logo-panel trace-logo-panel--mark"></div>
+                <svg id="compose-trace-mark" class="trace-logo trace-logo--mark" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path class="trace-logo-path" d="M150 100 C150 140, 110 170, 70 150 C40 135, 30 95, 50 70 C70 45, 110 45, 135 70" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
                 <span class="paper-kicker">现在</span>
               </div>
               <span id="font-style-label" class="paper-meta">默认</span>

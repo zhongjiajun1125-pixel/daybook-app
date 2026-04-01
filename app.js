@@ -1101,64 +1101,32 @@ function renderAccessView(status = "idle", customSubtitle = "") {
   const title = elements.unlockTitle;
   const subtitle = elements.unlockSubtitle;
   const primary = elements.unlockBtn;
-  const secondary = elements.unlockSecondaryBtn;
-  const manageActions = elements.unlockManageActions;
-  const pinSubmit = elements.pinSubmitBtn;
-  const pinCancel = elements.pinCancelBtn;
-
-  if (!title || !subtitle || !primary || !secondary || !pinSubmit || !pinCancel || !manageActions) return;
+  if (!title || !subtitle || !primary) return;
 
   primary.classList.remove("hidden");
-  secondary.classList.remove("hidden");
-  manageActions.classList.add("hidden");
-  showPinPanel(false);
+  showPinPanel(true);
+  title.textContent = "输入密码";
+  primary.textContent = status === "active" ? "验证中…" : "进入";
 
   if (status === "active") {
-    subtitle.textContent = "正在进入…";
+    subtitle.textContent = "正在验证…";
+    return;
   }
 
   if (status === "failed") {
     subtitle.textContent = customSubtitle || "请再试一次";
+    return;
   }
 
   if (status === "success") {
     subtitle.textContent = "已进入";
-  }
-
-  if (state.accessMode === "setup" || state.accessMode === "resetPin") {
-    title.textContent = state.accessMode === "resetPin" ? "修改密码" : "开启密码";
-    subtitle.textContent = customSubtitle || (state.accessMode === "resetPin" ? "输入新的 4 到 6 位数字" : "设置 4 到 6 位数字");
-    primary.classList.add("hidden");
-    secondary.classList.add("hidden");
-    pinSubmit.textContent = "保存并进入";
-    pinCancel.textContent = "返回";
-    showPinPanel(true);
-    if (elements.pinInput) {
-      elements.pinInput.value = "";
-      window.setTimeout(() => elements.pinInput.focus(), 30);
-    }
     return;
   }
 
-  if (state.pinEnabled) {
-    title.textContent = "输入密码";
-    subtitle.textContent = customSubtitle || (status === "active" ? "正在验证…" : "这台设备已开启本地保护");
-    primary.classList.add("hidden");
-    secondary.classList.add("hidden");
-    manageActions.classList.remove("hidden");
-    pinSubmit.textContent = "进入";
-    pinCancel.textContent = "清空";
-    showPinPanel(true);
-    if (elements.pinInput && status !== "success") {
-      window.setTimeout(() => elements.pinInput.focus(), 30);
-    }
-    return;
+  subtitle.textContent = customSubtitle || "本地保护已开启";
+  if (elements.pinInput) {
+    window.setTimeout(() => elements.pinInput.focus(), 30);
   }
-
-  title.textContent = "欢迎回来";
-  subtitle.textContent = customSubtitle || (status === "active" ? "正在进入…" : "你可以直接进入，也可以先开密码");
-  primary.textContent = "直接进入";
-  secondary.textContent = "开启密码";
 }
 
 async function completeUnlock() {
@@ -1174,24 +1142,7 @@ async function completeUnlock() {
 }
 
 async function handleUnlock() {
-  if (state.pinEnabled) {
-    renderAccessView("idle");
-    return;
-  }
-
-  renderAccessView("active");
-  setTraceLoading(true, "正在进入…");
-
-  try {
-    await completeUnlock();
-  } catch (error) {
-    console.error("Access boot failed:", error);
-    setTraceLoading(false);
-    renderAccessView("failed");
-    window.setTimeout(() => {
-      renderAccessView("idle");
-    }, 1000);
-  }
+  await handlePinSubmit();
 }
 
 async function handlePinSubmit() {
@@ -1205,24 +1156,7 @@ async function handlePinSubmit() {
   setTraceLoading(true, "正在验证…");
 
   try {
-    if (state.accessMode === "resetPin") {
-      await LocalPin.enroll(pin);
-      if (!db.instance) {
-        await db.init();
-      }
-      await migrateEntriesEncryptionMode(false);
-    } else if (!state.pinEnabled || state.accessMode === "setup") {
-      await LocalPin.enroll(pin);
-      if (!db.instance) {
-        await db.init();
-      }
-      if (!state.entries.length) {
-        state.entries = await hydrateStoredEntries(await db.getAll());
-      }
-      await migrateEntriesEncryptionMode(false);
-    } else {
-      await LocalPin.verify(pin);
-    }
+    await LocalPin.verify(pin);
 
     await completeUnlock();
   } catch (error) {
@@ -1302,21 +1236,6 @@ function bindEvents() {
 
   if (elements.pinSubmitBtn) {
     elements.pinSubmitBtn.addEventListener("click", handlePinSubmit);
-  }
-
-  if (elements.pinCancelBtn) {
-    elements.pinCancelBtn.addEventListener("click", () => {
-      if (state.accessMode === "setup") {
-        state.accessMode = state.pinEnabled ? "verify" : "choice";
-        renderAccessView("idle");
-        return;
-      }
-
-      if (elements.pinInput) {
-        elements.pinInput.value = "";
-        elements.pinInput.focus();
-      }
-    });
   }
 
   if (elements.pinInput) {
@@ -1416,27 +1335,6 @@ function bindEvents() {
   if (elements.importBtn && elements.importInput) {
     elements.importBtn.addEventListener("click", () => elements.importInput.click());
     elements.importInput.addEventListener("change", importEntries);
-  }
-
-  if (elements.profileNameInput) {
-    elements.profileNameInput.addEventListener("input", (event) => {
-      saveProfileName(event.target.value);
-    });
-  }
-
-  if (elements.unlockSecondaryBtn) {
-    elements.unlockSecondaryBtn.addEventListener("click", () => {
-      state.accessMode = "setup";
-      renderAccessView("idle");
-    });
-  }
-
-  if (elements.changePinBtn) {
-    elements.changePinBtn.addEventListener("click", handleChangePin);
-  }
-
-  if (elements.disablePinBtn) {
-    elements.disablePinBtn.addEventListener("click", handleDisablePin);
   }
 
   document.addEventListener("keydown", (event) => {
@@ -3049,5 +2947,5 @@ window.addEventListener("load", async () => {
   loadSystemState();
   TracePrediction.init();
   cleanupEchoChain();
-  showView("unlock");
+  showView(state.pinEnabled ? "unlock" : "onboarding");
 });
