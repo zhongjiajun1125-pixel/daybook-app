@@ -194,6 +194,23 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 }
 .unlock-btn:active { transform: scale(0.96); }
 
+.unlock-secondary-btn {
+  margin-top: 2px;
+  color: var(--text-ghost);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.16s ease;
+}
+
+.unlock-secondary-btn:hover {
+  color: var(--text-primary);
+}
+
+.unlock-secondary-btn:active {
+  transform: scale(0.96);
+}
+
 .pin-panel {
   width: min(280px, 82vw);
   margin-top: 14px;

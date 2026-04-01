@@ -178,6 +178,7 @@ const elements = {
   unlockTitle: document.getElementById("unlock-title"),
   unlockSubtitle: document.getElementById("unlock-subtitle"),
   pinPanel: document.getElementById("pin-panel"),
+  unlockSecondaryBtn: document.getElementById("unlock-secondary-btn"),
   pinInput: document.getElementById("pin-input"),
   pinSubmitBtn: document.getElementById("pin-submit-btn"),
   pinCancelBtn: document.getElementById("pin-cancel-btn"),
@@ -221,6 +222,7 @@ let state = {
   fontStyle: window.localStorage.getItem(FONT_STYLE_KEY) || "system",
   bioEnrolled: window.localStorage.getItem(BIO_KEY) === "1",
   pinEnabled: Boolean(window.localStorage.getItem(PIN_HASH_KEY)),
+  accessMode: "choice",
   echoChain: {},
   pendingEcho: null,
   lastEchoText: null,
@@ -232,6 +234,8 @@ let implicitSession = {
   backspaceCount: 0,
   hasTyped: false,
 };
+
+const SESSION_UNLOCK_KEY = "trace-session-unlocked";
 
 let echoCardTimer = null;
 let insightResizeTimer = null;
@@ -568,25 +572,12 @@ async function bootSystem() {
   }
 }
 
-function getBioCopy() {
+function resetLegacyBioState() {
   const hasCredential = Boolean(window.localStorage.getItem(BIO_CRED_KEY));
-  const canUseBio = LocalBio.isSupported() && hasCredential;
-
-  if (state.bioEnrolled) {
-    return {
-      idle: canUseBio ? "使用面容继续" : "改用 PIN 继续",
-      active: "识别中",
-      success: "已解锁",
-      failed: "可改用 PIN",
-    };
+  if (state.bioEnrolled && !hasCredential) {
+    state.bioEnrolled = false;
+    window.localStorage.removeItem(BIO_KEY);
   }
-
-  return {
-    idle: state.pinEnabled ? "先输入 PIN，再启用面容" : "先设置一个 PIN",
-    active: "设置中",
-    success: "已启用",
-    failed: "请改用 PIN",
-  };
 }
 
 function setStatusMessage(text = "", timeout = 0) {
@@ -733,74 +724,94 @@ function startVoiceCapture() {
 function showPinPanel(visible) {
   if (!elements.pinPanel) return;
   elements.pinPanel.classList.toggle("hidden", !visible);
+}
 
-  if (visible) {
+function renderAccessView(status = "idle", customSubtitle = "") {
+  const title = elements.unlockTitle;
+  const subtitle = elements.unlockSubtitle;
+  const primary = elements.unlockBtn;
+  const secondary = elements.unlockSecondaryBtn;
+  const pinSubmit = elements.pinSubmitBtn;
+  const pinCancel = elements.pinCancelBtn;
+
+  if (!title || !subtitle || !primary || !secondary || !pinSubmit || !pinCancel) return;
+
+  primary.classList.remove("hidden");
+  secondary.classList.remove("hidden");
+  showPinPanel(false);
+
+  if (status === "active") {
+    subtitle.textContent = "正在进入…";
+  }
+
+  if (status === "failed") {
+    subtitle.textContent = customSubtitle || "请再试一次";
+  }
+
+  if (status === "success") {
+    subtitle.textContent = "已进入";
+  }
+
+  if (state.accessMode === "setup") {
+    title.textContent = "开启密码";
+    subtitle.textContent = customSubtitle || "设置 4 到 6 位数字";
+    primary.classList.add("hidden");
+    secondary.classList.add("hidden");
+    pinSubmit.textContent = "保存并进入";
+    pinCancel.textContent = "返回";
+    showPinPanel(true);
     if (elements.pinInput) {
       elements.pinInput.value = "";
       window.setTimeout(() => elements.pinInput.focus(), 30);
     }
-    if (elements.unlockBtn) elements.unlockBtn.classList.add("hidden");
     return;
   }
 
-  if (elements.unlockBtn) elements.unlockBtn.classList.remove("hidden");
-}
+  if (state.pinEnabled) {
+    title.textContent = "输入密码";
+    subtitle.textContent = customSubtitle || (status === "active" ? "正在验证…" : "这台设备已开启本地保护");
+    primary.classList.add("hidden");
+    secondary.classList.add("hidden");
+    pinSubmit.textContent = "进入";
+    pinCancel.textContent = "清空";
+    showPinPanel(true);
+    if (elements.pinInput && status !== "success") {
+      window.setTimeout(() => elements.pinInput.focus(), 30);
+    }
+    return;
+  }
 
-function syncUnlockLabel(status = "idle") {
-  if (!elements.unlockBtn) return;
-  const copy = getBioCopy();
-  const current = copy[status] || copy.idle;
-  if (elements.unlockTitle) {
-    elements.unlockTitle.textContent = "解锁";
-  }
-  if (elements.unlockSubtitle) {
-    elements.unlockSubtitle.textContent = current;
-  }
-  elements.unlockBtn.textContent = state.bioEnrolled || state.pinEnabled ? "继续" : "启用";
-}
-
-async function fallbackToPin() {
-  if (elements.unlockTitle) {
-    elements.unlockTitle.textContent = "解锁";
-  }
-  if (elements.unlockSubtitle) {
-    elements.unlockSubtitle.textContent = state.pinEnabled ? "输入 PIN 继续" : "先设置一个 PIN";
-  }
-  showPinPanel(true);
+  title.textContent = "欢迎回来";
+  subtitle.textContent = customSubtitle || (status === "active" ? "正在进入…" : "你可以直接进入，也可以先开密码");
+  primary.textContent = "直接进入";
+  secondary.textContent = "开启密码";
 }
 
 async function completeUnlock() {
-  syncUnlockLabel("success");
+  renderAccessView("success");
+  window.sessionStorage.setItem(SESSION_UNLOCK_KEY, "1");
   window.setTimeout(() => {
     showPinPanel(false);
-    bootSystem();
+    bootSystem().then(() => checkPendingEchoOnBoot());
   }, 280);
 }
 
 async function handleUnlock() {
-  syncUnlockLabel("active");
+  if (state.pinEnabled) {
+    renderAccessView("idle");
+    return;
+  }
+
+  renderAccessView("active");
 
   try {
-    if (state.bioEnrolled && !window.localStorage.getItem(BIO_CRED_KEY)) {
-      state.bioEnrolled = false;
-      window.localStorage.removeItem(BIO_KEY);
-    }
-
-    if (!state.bioEnrolled) {
-      await fallbackToPin();
-      return;
-    }
-
-    if (!LocalBio.isSupported()) {
-      await fallbackToPin();
-      return;
-    }
-
-    await LocalBio.verify();
     await completeUnlock();
   } catch (error) {
-    console.error("Bio Auth Failed:", error);
-    await fallbackToPin();
+    console.error("Access boot failed:", error);
+    renderAccessView("failed");
+    window.setTimeout(() => {
+      renderAccessView("idle");
+    }, 1000);
   }
 }
 
@@ -811,54 +822,30 @@ async function handlePinSubmit() {
     return;
   }
 
-  syncUnlockLabel("active");
+  renderAccessView("active");
 
   try {
-    const isNewEnrollment = !state.pinEnabled;
-
-    if (isNewEnrollment) {
+    if (!state.pinEnabled || state.accessMode === "setup") {
       await LocalPin.enroll(pin);
     } else {
       await LocalPin.verify(pin);
     }
 
-    if (isNewEnrollment && !state.bioEnrolled && LocalBio.isSupported()) {
-      if (elements.unlockSubtitle) {
-        elements.unlockSubtitle.textContent = "PIN 已保存，请录入面容";
-      }
-
-      try {
-        await LocalBio.enroll();
-        state.bioEnrolled = true;
-        window.localStorage.setItem(BIO_KEY, "1");
-      } catch (bioError) {
-        console.warn("面容录入跳过或失败，不影响解锁", bioError);
-      }
-    }
-
     await completeUnlock();
   } catch (error) {
     console.error("PIN Auth Failed:", error);
-    syncUnlockLabel("failed");
-    if (elements.unlockSubtitle) {
-      elements.unlockSubtitle.textContent = state.pinEnabled ? "PIN 不正确" : "PIN 设置失败";
-    }
+    renderAccessView("failed", state.pinEnabled ? "PIN 不正确" : "PIN 设置失败");
     if (elements.pinInput) elements.pinInput.value = "";
     window.setTimeout(() => {
-      syncUnlockLabel("idle");
-      showPinPanel(true);
+      renderAccessView("idle");
     }, 1200);
   }
 }
 
 function init() {
-  if (state.bioEnrolled && !window.localStorage.getItem(BIO_CRED_KEY)) {
-    state.bioEnrolled = false;
-    window.localStorage.removeItem(BIO_KEY);
-  }
-
-  syncUnlockLabel("idle");
-  showPinPanel(false);
+  resetLegacyBioState();
+  state.accessMode = state.pinEnabled ? "verify" : "choice";
+  renderAccessView("idle");
   initVoiceRecognition();
   bindEvents();
 }
@@ -874,8 +861,16 @@ function bindEvents() {
 
   if (elements.pinCancelBtn) {
     elements.pinCancelBtn.addEventListener("click", () => {
-      showPinPanel(false);
-      syncUnlockLabel("idle");
+      if (state.accessMode === "setup") {
+        state.accessMode = state.pinEnabled ? "verify" : "choice";
+        renderAccessView("idle");
+        return;
+      }
+
+      if (elements.pinInput) {
+        elements.pinInput.value = "";
+        elements.pinInput.focus();
+      }
     });
   }
 
@@ -970,6 +965,13 @@ function bindEvents() {
   if (elements.importBtn && elements.importInput) {
     elements.importBtn.addEventListener("click", () => elements.importInput.click());
     elements.importInput.addEventListener("change", importEntries);
+  }
+
+  if (elements.unlockSecondaryBtn) {
+    elements.unlockSecondaryBtn.addEventListener("click", () => {
+      state.accessMode = "setup";
+      renderAccessView("idle");
+    });
   }
 
   document.addEventListener("keydown", (event) => {
@@ -2461,13 +2463,5 @@ window.addEventListener("load", async () => {
   loadSystemState();
   TracePrediction.init();
   cleanupEchoChain();
-  showView("onboarding");
-
-  try {
-    await bootSystem();
-    checkPendingEchoOnBoot();
-  } catch (error) {
-    console.error("Trace startup fallback:", error);
-    showView("onboarding");
-  }
+  showView("unlock");
 });
