@@ -132,16 +132,13 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 .trace-logo-panel {
   position: relative;
   isolation: isolate;
-  background-color: var(--text-primary);
+  background-image: url("./image.png");
+  background-repeat: no-repeat;
+  background-size: 300% auto;
+  background-position: 50% 14%;
+  background-color: transparent;
+  mix-blend-mode: multiply;
   opacity: 0.94;
-  -webkit-mask-image: url("./image.png");
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-size: 300% auto;
-  -webkit-mask-position: 50% 14%;
-  mask-image: url("./image.png");
-  mask-repeat: no-repeat;
-  mask-size: 300% auto;
-  mask-position: 50% 14%;
 }
 
 .trace-logo-panel::after {
@@ -415,6 +412,12 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 
 body.time-night .trace-logo-panel::after {
   border-color: rgba(255, 255, 255, 0.18);
+}
+
+body.time-night .trace-logo-panel {
+  filter: invert(1);
+  mix-blend-mode: screen;
+  opacity: 0.9;
 }
 
 .compose-shell {
