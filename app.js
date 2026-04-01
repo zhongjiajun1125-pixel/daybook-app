@@ -200,6 +200,7 @@ const elements = {
   pinCancelBtn: document.getElementById("pin-cancel-btn"),
   onboardingView: document.getElementById("onboarding-view"),
   onboardingTraceMark: document.getElementById("onboarding-trace-mark"),
+  thresholdLine: document.getElementById("threshold-line"),
   enterWritingBtn: document.getElementById("enter-writing-btn"),
   composeView: document.getElementById("compose-view"),
   systemEchoPanel: document.getElementById("system-echo-panel"),
@@ -840,10 +841,11 @@ async function bootSystem() {
     elements.rawMemoryInput.value = state.draft;
     applyFontStyle(state.fontStyle);
 
-    if (!state.entries.length) {
-      showView("onboarding");
-    } else {
-      showView("compose");
+    const hasEntries = state.entries.length > 0;
+    updateHomepageState(hasEntries);
+    showView("onboarding");
+
+    if (hasEntries) {
       const sniperEcho = RetentionSniper.check();
       if (sniperEcho) {
         renderEchoBlock({ echo: sniperEcho, question: "", pattern_hint: "" });
@@ -862,6 +864,18 @@ async function bootSystem() {
     if (elements.unlockBtn) {
       elements.unlockBtn.textContent = "打开失败";
     }
+  }
+}
+
+function updateHomepageState(hasEntries) {
+  if (elements.thresholdLine) {
+    elements.thresholdLine.textContent = hasEntries
+      ? "It’s still here."
+      : "Not everything needs to be said.";
+  }
+
+  if (elements.enterWritingBtn) {
+    elements.enterWritingBtn.textContent = hasEntries ? "Continue" : "Begin";
   }
 }
 

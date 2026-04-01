@@ -215,27 +215,37 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   animation: traceEchoOrbit 0.68s ease-out forwards;
 }
 
-.narrative-shell {
-  color: var(--text-secondary);
-  font-size: 1.05rem;
-  margin-bottom: 64px;
+.threshold-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 0 auto;
+  min-height: 64vh;
   animation: fadeIn 1.5s ease-out;
-  max-width: 31rem;
 }
-.eyebrow-text {
-  font-size: 0.75rem;
-  letter-spacing: 0.18em;
-  color: var(--text-ghost);
-  margin-bottom: 1.1rem;
-}
-.hero-text {
-  font-size: clamp(1.35rem, 2vw, 1.75rem);
-  font-weight: 500;
+
+.threshold-line {
   color: var(--text-primary);
-  letter-spacing: 0.02em;
-  line-height: 1.45;
+  font-size: clamp(1.22rem, 1.8vw, 1.52rem);
+  font-weight: 470;
+  letter-spacing: 0.01em;
+  line-height: 1.42;
+  max-width: 18ch;
 }
-.primary-action-btn { font-size: 1.05rem; color: var(--text-primary); cursor: pointer; border-bottom: 1px solid var(--text-primary); padding-bottom: 2px; }
+
+.action-shell--threshold {
+  margin-top: 18px;
+}
+
+.primary-action-btn {
+  font-size: 1rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-bottom: 1px solid rgba(23, 23, 23, 0.42);
+  padding-bottom: 2px;
+}
 .primary-action-btn:active { transform: scale(0.98); }
 
 .unlock-view {
@@ -418,6 +428,10 @@ body.time-night .trace-logo-panel {
   filter: invert(1);
   mix-blend-mode: screen;
   opacity: 0.9;
+}
+
+body.time-night .primary-action-btn {
+  border-bottom-color: rgba(229, 231, 235, 0.34);
 }
 
 .compose-shell {
@@ -869,6 +883,8 @@ body.listening-mode .status-indicator {
   .history-panel { width: 100vw; border-left: none; }
   #global-tools { top: 18px; right: 18px; gap: 10px; padding: 7px 9px; }
   .trace-loading { top: 18px; max-width: calc(100vw - 32px); }
+  .threshold-shell { min-height: 58vh; }
+  .threshold-line { max-width: 16ch; font-size: 1.16rem; }
   .writing-card { min-height: calc(100vh - 150px); padding: 28px 22px 20px; border-radius: 26px; }
   .compose-shell { min-height: calc(100vh - 24px); }
   .footer-actions { gap: 18px; }
