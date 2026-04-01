@@ -644,6 +644,9 @@ body.listening-mode .status-indicator {
 .history-metadata { font-size: 0.75rem; color: var(--text-primary); font-weight: 500;}
 .history-friction { font-size: 0.7rem; color: var(--text-ghost); background: var(--accent-friction); padding: 2px 6px; border-radius: 4px;}
 .history-delete-btn {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
   margin-left: auto;
   color: var(--text-ghost);
   font-size: 0.72rem;

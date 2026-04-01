@@ -5,6 +5,7 @@
 
 const DB_NAME = "TraceCognitionDB";
 const STORE_NAME = "entries";
+const SETTINGS_STORE = "settings";
 const DRAFT_KEY = "trace-draft-v1";
 const LAST_ACTIVE_KEY = "trace-last-active";
 const FONT_STYLE_KEY = "trace-font-style";
@@ -14,6 +15,8 @@ const BIO_CRED_KEY = "trace-bio-cred-id";
 const PIN_HASH_KEY = "trace-pin-hash";
 const SYSTEM_STATE_KEY = "trace_system_v1";
 const PREDICTION_STATE_KEY = "trace_prediction_v1";
+const ENCRYPTION_SALT_KEY = "trace-pin-salt";
+const VAULT_HANDLE_KEY = "trace-vault-handle";
 
 let audioCtx = null;
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -126,6 +129,7 @@ const LocalPin = {
 
     const hash = await this.hash(pin);
     window.localStorage.setItem(PIN_HASH_KEY, hash);
+    sessionKey = await deriveSessionKey(pin);
     state.pinEnabled = true;
     return true;
   },
@@ -141,6 +145,7 @@ const LocalPin = {
       throw new Error("PIN 不匹配");
     }
 
+    sessionKey = await deriveSessionKey(pin);
     return true;
   },
 };
@@ -173,6 +178,7 @@ const elements = {
   importInput: document.getElementById("import-file-input"),
   exportBtn: document.getElementById("export-data-btn"),
   fontToggleBtn: document.getElementById("font-toggle-btn"),
+  vaultToggleBtn: document.getElementById("vault-toggle-btn"),
   historyToggle: document.getElementById("history-toggle"),
   unlockView: document.getElementById("unlock-view"),
   unlockBtn: document.getElementById("unlock-btn"),
@@ -248,6 +254,7 @@ let echoCardTimer = null;
 let insightResizeTimer = null;
 let graphAnimationFrame = null;
 let recognition = null;
+let sessionKey = null;
 
 const predictionState = {
   lastText: null,
@@ -342,11 +349,14 @@ const db = {
   instance: null,
   async init() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 2);
+      const request = indexedDB.open(DB_NAME, 3);
       request.onupgradeneeded = (event) => {
         const database = event.target.result;
         if (!database.objectStoreNames.contains(STORE_NAME)) {
           database.createObjectStore(STORE_NAME, { keyPath: "id" });
+        }
+        if (!database.objectStoreNames.contains(SETTINGS_STORE)) {
+          database.createObjectStore(SETTINGS_STORE);
         }
       };
       request.onsuccess = (event) => {
@@ -382,7 +392,256 @@ const db = {
       tx.oncomplete = () => resolve();
     });
   },
+  async getSetting(key) {
+    if (!this.instance) return null;
+    const tx = this.instance.transaction(SETTINGS_STORE, "readonly");
+    const request = tx.objectStore(SETTINGS_STORE).get(key);
+    return new Promise((resolve) => {
+      request.onsuccess = () => resolve(request.result ?? null);
+      request.onerror = () => resolve(null);
+    });
+  },
+  async setSetting(key, value) {
+    if (!this.instance) return;
+    const tx = this.instance.transaction(SETTINGS_STORE, "readwrite");
+    tx.objectStore(SETTINGS_STORE).put(value, key);
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve();
+    });
+  },
 };
+
+function bytesToBase64(bytes) {
+  return window.btoa(String.fromCharCode(...bytes));
+}
+
+function base64ToBytes(base64) {
+  return Uint8Array.from(window.atob(base64), (char) => char.charCodeAt(0));
+}
+
+function createPlainEntryShape(entry) {
+  return {
+    id: entry.id || `mem-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    content: typeof entry.content === "string" ? entry.content : "",
+    timestamp: entry.timestamp || new Date().toISOString(),
+    context: {
+      durationSec: Number.isFinite(entry.context?.durationSec) ? entry.context.durationSec : 0,
+      friction: Number.isFinite(entry.context?.friction) ? entry.context.friction : 0,
+      timePhase: entry.context?.timePhase || resolveTimePhase(new Date(entry.timestamp || Date.now())),
+    },
+    tags: {
+      emotion: entry.tags?.emotion || null,
+      keywords: Array.isArray(entry.tags?.keywords) ? entry.tags.keywords : [],
+    },
+    system: {
+      weight: Number.isFinite(entry.system?.weight) ? entry.system.weight : 0,
+      echo: entry.system?.echo || null,
+      echoLevel: entry.system?.echoLevel || null,
+      echoType: entry.system?.echoType || null,
+      flashback: entry.system?.flashback || null,
+    },
+    metadata: entry.metadata || null,
+    analysis: entry.analysis || null,
+  };
+}
+
+async function ensureEncryptionSalt() {
+  let salt = window.localStorage.getItem(ENCRYPTION_SALT_KEY);
+  if (salt) return base64ToBytes(salt);
+
+  const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+  window.localStorage.setItem(ENCRYPTION_SALT_KEY, bytesToBase64(bytes));
+  return bytes;
+}
+
+async function deriveSessionKey(pin) {
+  if (!(window.crypto && window.crypto.subtle)) return null;
+  const salt = await ensureEncryptionSalt();
+  const material = await window.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(pin),
+    "PBKDF2",
+    false,
+    ["deriveKey"],
+  );
+  return window.crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 120000,
+      hash: "SHA-256",
+    },
+    material,
+    {
+      name: "AES-GCM",
+      length: 256,
+    },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+async function encryptEntryRecord(entry) {
+  if (!state.pinEnabled || !sessionKey || !(window.crypto && window.crypto.subtle)) {
+    const plain = createPlainEntryShape(entry);
+    delete plain.encrypted;
+    delete plain.secure;
+    return plain;
+  }
+
+  const plain = createPlainEntryShape(entry);
+  const sensitivePayload = {
+    content: plain.content,
+    tags: plain.tags,
+    metadata: plain.metadata,
+    analysis: plain.analysis,
+    system: {
+      echo: plain.system.echo,
+      echoLevel: plain.system.echoLevel,
+      echoType: plain.system.echoType,
+      flashback: plain.system.flashback || null,
+    },
+  };
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(JSON.stringify(sensitivePayload));
+  const cipherBuffer = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv }, sessionKey, encoded);
+
+  return {
+    id: plain.id,
+    timestamp: plain.timestamp,
+    context: plain.context,
+    encrypted: true,
+    secure: {
+      iv: bytesToBase64(iv),
+      ciphertext: bytesToBase64(new Uint8Array(cipherBuffer)),
+      version: 1,
+    },
+  };
+}
+
+async function decryptEntryRecord(entry) {
+  if (!entry?.encrypted || !entry.secure?.ciphertext || !entry.secure?.iv) {
+    return createPlainEntryShape(entry);
+  }
+
+  if (!sessionKey || !(window.crypto && window.crypto.subtle)) {
+    return createPlainEntryShape({
+      ...entry,
+      content: "[已加密内容]",
+      tags: { emotion: null, keywords: [] },
+      metadata: entry.metadata || null,
+      analysis: null,
+      system: { ...(entry.system || {}), echo: null, flashback: null },
+    });
+  }
+
+  try {
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64ToBytes(entry.secure.iv) },
+      sessionKey,
+      base64ToBytes(entry.secure.ciphertext),
+    );
+    const payload = JSON.parse(new TextDecoder().decode(decrypted));
+    return createPlainEntryShape({
+      ...entry,
+      content: payload.content,
+      tags: payload.tags,
+      metadata: payload.metadata,
+      analysis: payload.analysis,
+      system: {
+        ...(entry.system || {}),
+        ...(payload.system || {}),
+      },
+    });
+  } catch {
+    return createPlainEntryShape({
+      ...entry,
+      content: "[解密失败]",
+      tags: { emotion: null, keywords: [] },
+      metadata: entry.metadata || null,
+      analysis: null,
+      system: { ...(entry.system || {}), echo: null, flashback: null },
+    });
+  }
+}
+
+async function saveEntryRecord(entry, options = {}) {
+  const record = options.forcePlain ? createPlainEntryShape(entry) : await encryptEntryRecord(entry);
+  await db.put(record);
+}
+
+async function migrateEntriesEncryptionMode(forcePlain = false) {
+  if (!state.entries.length) return;
+  for (const entry of state.entries) {
+    await saveEntryRecord(entry, { forcePlain });
+  }
+}
+
+async function hydrateStoredEntries(records) {
+  const hydrated = [];
+  for (const record of records) {
+    hydrated.push(await decryptEntryRecord(record));
+  }
+  return normalizeEntries(hydrated);
+}
+
+async function connectVaultFolder() {
+  if (!window.showDirectoryPicker) {
+    setStatusMessage("当前浏览器不支持保险库", 1600);
+    return;
+  }
+
+  try {
+    const handle = await window.showDirectoryPicker({ id: "trace-vault", mode: "readwrite" });
+    await db.setSetting(VAULT_HANDLE_KEY, handle);
+    syncVaultButton(true);
+    setStatusMessage("保险库已连接", 1600);
+  } catch {
+    setStatusMessage("未连接保险库", 1200);
+  }
+}
+
+async function writeEntryToVault(entry) {
+  const handle = await db.getSetting(VAULT_HANDLE_KEY);
+  if (!handle) return;
+
+  try {
+    const currentPermission = await handle.queryPermission?.({ mode: "readwrite" });
+    const permission = currentPermission === "granted"
+      ? currentPermission
+      : await handle.requestPermission?.({ mode: "readwrite" });
+
+    if (permission !== "granted") return;
+
+    const fileName = `${entry.timestamp.slice(0, 19).replace(/[:T]/g, "-")}-${entry.id}.md`;
+    const fileHandle = await handle.getFileHandle(fileName, { create: true });
+    const writer = await fileHandle.createWritable();
+    const lines = [
+      `# ${new Date(entry.timestamp).toLocaleString("zh-CN")}`,
+      "",
+      entry.content || "",
+      "",
+      `- 锚点: ${entry.metadata?.anchor || "未标记"}`,
+      `- 时间相位: ${entry.context?.timePhase || "未知"}`,
+      `- 摩擦: ${entry.context?.friction || 0}`,
+    ];
+    await writer.write(lines.join("\n"));
+    await writer.close();
+  } catch {
+    // keep silent
+  }
+}
+
+async function syncVaultButton(connected) {
+  if (!elements.vaultToggleBtn) return;
+
+  let resolved = connected;
+  if (typeof resolved !== "boolean") {
+    resolved = Boolean(await db.getSetting(VAULT_HANDLE_KEY));
+  }
+
+  elements.vaultToggleBtn.textContent = resolved ? "保险库已连" : "保险库";
+}
 
 function persistSystemState() {
   window.localStorage.setItem(
@@ -567,8 +826,10 @@ async function bootSystem() {
   try {
     await db.init();
     health.dbReady = true;
-    state.entries = normalizeEntries(await db.getAll());
+    const storedRecords = await db.getAll();
+    state.entries = await hydrateStoredEntries(storedRecords);
     await reanalyzeEntriesIfNeeded();
+    await syncVaultButton();
     state.isLoaded = true;
     elements.rawMemoryInput.value = state.draft;
     applyFontStyle(state.fontStyle);
@@ -586,6 +847,9 @@ async function bootSystem() {
     }
 
     RetentionSniper.updateActivity();
+    if (state.pinEnabled && sessionKey && storedRecords.some((record) => !record?.encrypted)) {
+      await migrateEntriesEncryptionMode(false);
+    }
     runHealthChecks();
   } catch (error) {
     health.lastError = error instanceof Error ? error.message : String(error);
@@ -877,8 +1141,19 @@ async function handlePinSubmit() {
   try {
     if (state.accessMode === "resetPin") {
       await LocalPin.enroll(pin);
+      if (!db.instance) {
+        await db.init();
+      }
+      await migrateEntriesEncryptionMode(false);
     } else if (!state.pinEnabled || state.accessMode === "setup") {
       await LocalPin.enroll(pin);
+      if (!db.instance) {
+        await db.init();
+      }
+      if (!state.entries.length) {
+        state.entries = await hydrateStoredEntries(await db.getAll());
+      }
+      await migrateEntriesEncryptionMode(false);
     } else {
       await LocalPin.verify(pin);
     }
@@ -912,11 +1187,18 @@ async function handleDisablePin() {
 
   try {
     await LocalPin.verify(currentPin);
+    if (!db.instance) {
+      await db.init();
+    }
+    state.entries = await hydrateStoredEntries(await db.getAll());
+    await migrateEntriesEncryptionMode(true);
     window.localStorage.removeItem(PIN_HASH_KEY);
     window.localStorage.removeItem(BIO_KEY);
     window.localStorage.removeItem(BIO_CRED_KEY);
+    window.localStorage.removeItem(ENCRYPTION_SALT_KEY);
     state.pinEnabled = false;
     state.bioEnrolled = false;
+    sessionKey = null;
     state.accessMode = "choice";
     if (elements.pinInput) elements.pinInput.value = "";
     renderAccessView("idle", "密码已关闭");
@@ -934,6 +1216,10 @@ async function handleChangePin() {
 
   try {
     await LocalPin.verify(currentPin);
+    if (!db.instance) {
+      await db.init();
+    }
+    state.entries = await hydrateStoredEntries(await db.getAll());
     state.accessMode = "resetPin";
     if (elements.pinInput) elements.pinInput.value = "";
     renderAccessView("idle", "输入新的 4 到 6 位数字");
@@ -1054,6 +1340,12 @@ function bindEvents() {
     elements.fontToggleBtn.addEventListener("click", cycleFontStyle);
   }
 
+  if (elements.vaultToggleBtn) {
+    elements.vaultToggleBtn.addEventListener("click", () => {
+      connectVaultFolder();
+    });
+  }
+
   if (elements.importBtn && elements.importInput) {
     elements.importBtn.addEventListener("click", () => elements.importInput.click());
     elements.importInput.addEventListener("change", importEntries);
@@ -1157,7 +1449,7 @@ async function submitEntry() {
   elements.saveStatus.textContent = "封存中…";
   playTraceFeedback();
 
-  await db.put(entry);
+  await saveEntryRecord(entry);
   upsertStateEntry(entry);
   RetentionSniper.updateActivity();
 
@@ -1176,6 +1468,7 @@ async function submitEntry() {
     elements.saveStatus.textContent = "已封存";
 
     await silentAnalyze(entry);
+    await writeEntryToVault(entry);
     triggerSystemEcho();
 
     const echoPayload = buildEntryEchoCard(entry);
@@ -1265,7 +1558,10 @@ function renderEchoBlock(response) {
 
 function buildEntryEchoCard(entry) {
   if (entry.system?.echo) {
-    return entry.system.echo;
+    return {
+      ...entry.system.echo,
+      l3: entry.system.flashback || entry.system.echo.l3 || "",
+    };
   }
 
   const response = entry.analysis?.response || {};
@@ -1275,7 +1571,7 @@ function buildEntryEchoCard(entry) {
     return {
       l1: pieces[0] || "",
       l2: pieces[1] || "",
-      l3: pieces[2] || "",
+      l3: entry.system?.flashback || pieces[2] || "",
       level: 1,
     };
   }
@@ -1284,7 +1580,7 @@ function buildEntryEchoCard(entry) {
     return {
       l1: "你刚刚留下了一段话。",
       l2: "它已经被收进这次记录里。",
-      l3: "",
+      l3: entry.system?.flashback || "",
       level: 1,
     };
   }
@@ -1299,6 +1595,7 @@ async function silentAnalyze(entry) {
   };
   entry.system.weight = calculateWeight(entry, state.entries);
   entry.analysis = AIEngine.analyze(entry, [entry, ...state.entries.filter((item) => item.id !== entry.id)]);
+  entry.system.flashback = findSerendipitousEcho(entry, state.entries.filter((item) => item.id !== entry.id));
 
   const echoResult = scheduleEcho(entry, state.entries);
 
@@ -1316,7 +1613,7 @@ async function silentAnalyze(entry) {
     persistSystemState();
   }
 
-  await db.put(entry);
+  await saveEntryRecord(entry);
   upsertStateEntry(entry);
 }
 
@@ -1628,9 +1925,7 @@ function renderHistory() {
 
   state.entries.forEach((entry) => {
     const date = new Date(entry.timestamp);
-    const dateLabel = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-      date.getDate(),
-    ).padStart(2, "0")}`;
+    const dateLabel = formatEntropyGroup(date);
 
     if (dateLabel !== currentDateLabel) {
       const divider = document.createElement("div");
@@ -1641,9 +1936,7 @@ function renderHistory() {
     }
 
     const node = elements.historyEntryTemplate.content.firstElementChild.cloneNode(true);
-    node.querySelector(".history-time").textContent = `${String(date.getHours()).padStart(2, "0")}:${String(
-      date.getMinutes(),
-    ).padStart(2, "0")}`;
+    node.querySelector(".history-time").textContent = formatEntropyMoment(date);
 
     const metadataNode = node.querySelector(".history-metadata");
     if (metadataNode && entry.metadata?.anchor) {
@@ -1659,6 +1952,9 @@ function renderHistory() {
 
     const deleteBtn = node.querySelector(".history-delete-btn");
     if (deleteBtn) {
+      deleteBtn.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
       deleteBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
         await deleteEntry(entry.id);
@@ -1678,8 +1974,10 @@ function renderHistory() {
             entry.analysis?.response?.pattern_hint,
           ].filter(Boolean),
         );
-    if (echoNode && secondaryNode && echoSummary) {
-      echoNode.textContent = echoSummary;
+    const flashbackSummary = entry.system?.flashback || "";
+    const secondarySummary = [echoSummary, flashbackSummary].filter(Boolean).join(" ");
+    if (echoNode && secondaryNode && secondarySummary) {
+      echoNode.textContent = secondarySummary;
       secondaryNode.classList.remove("hidden");
     }
 
@@ -2174,10 +2472,10 @@ async function importEntries(event) {
     });
 
     for (const entry of merged.values()) {
-      await db.put(entry);
+      await saveEntryRecord(entry);
     }
 
-    state.entries = normalizeEntries(await db.getAll());
+    state.entries = await hydrateStoredEntries(await db.getAll());
     await reanalyzeEntriesIfNeeded();
     triggerSystemEcho();
     if (state.historyOpen) {
@@ -2325,6 +2623,7 @@ function normalizeEntries(entries) {
         echo: entry.system?.echo || null,
         echoLevel: entry.system?.echoLevel || null,
         echoType: entry.system?.echoType || null,
+        flashback: entry.system?.flashback || null,
       },
       metadata: entry.metadata || null,
       analysis: entry.analysis || null,
@@ -2349,14 +2648,14 @@ async function reanalyzeEntriesIfNeeded() {
         keywords: extractKeywords(entry.content || "", entry),
       };
       entry.analysis = AIEngine.analyze(entry, [entry, ...previousEntries.filter((item) => item.id !== entry.id)]);
-      await db.put(entry);
+      await saveEntryRecord(entry);
       changed = true;
     }
     rebuilt.push(entry);
   }
 
   if (changed) {
-    state.entries = normalizeEntries(await db.getAll());
+    state.entries = await hydrateStoredEntries(await db.getAll());
   }
 }
 
@@ -2582,6 +2881,84 @@ function summarizeHistoryEcho(parts) {
   const firstLine = parts[0] || "";
   if (firstLine.length <= 42) return firstLine;
   return `${firstLine.slice(0, 42)}…`;
+}
+
+function findSerendipitousEcho(currentEntry, entries) {
+  if (!currentEntry?.content || !entries?.length) return null;
+
+  const currentTime = new Date(currentEntry.timestamp).getTime();
+  const currentKeywords = currentEntry.tags?.keywords || [];
+  const currentAnchor = currentEntry.metadata?.anchor || "";
+  const threshold = 75 * 24 * 60 * 60 * 1000;
+
+  let candidate = null;
+  let bestScore = 0;
+
+  entries.forEach((entry) => {
+    const entryTime = new Date(entry.timestamp).getTime();
+    if (!Number.isFinite(entryTime) || currentTime - entryTime < threshold) return;
+
+    const oldKeywords = entry.tags?.keywords || [];
+    const sharedKeywords = currentKeywords.filter((keyword) => oldKeywords.includes(keyword));
+    const sameAnchor = Boolean(currentAnchor && entry.metadata?.anchor === currentAnchor);
+    const weightedOldEntry =
+      entry.metadata?.anchor === "焦滞" ||
+      entry.context?.friction >= 8 ||
+      entry.system?.weight >= 4;
+
+    const score = sharedKeywords.length * 2 + (sameAnchor ? 2 : 0) + (weightedOldEntry ? 1 : 0);
+    if (score < 3 || score <= bestScore) return;
+
+    bestScore = score;
+    candidate = entry;
+  });
+
+  if (!candidate) return null;
+
+  const excerpt = summarizeHistoryContent(candidate.content || "");
+  return `这和${formatEntropyMoment(new Date(candidate.timestamp))}写下的那段话，像是同一个没有解开的结：「${excerpt}」`;
+}
+
+function getDayDiff(date) {
+  const now = new Date();
+  const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return Math.round((startNow - startDate) / (24 * 60 * 60 * 1000));
+}
+
+function phaseLabel(date) {
+  const phase = resolveTimePhase(date);
+  if (phase === "深夜") return "深夜";
+  if (phase === "清晨") return "清晨";
+  return "日间";
+}
+
+function weekdayLabel(date) {
+  return ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"][date.getDay()];
+}
+
+function formatEntropyGroup(date) {
+  const diff = getDayDiff(date);
+  if (diff <= 0) return "今天";
+  if (diff === 1) return "昨天";
+  if (diff < 7) return `上个${weekdayLabel(date)}`;
+  if (date.getFullYear() === new Date().getFullYear()) {
+    return `${date.getMonth() + 1}月的某个${phaseLabel(date)}`;
+  }
+  return `${date.getFullYear()}年${date.getMonth() + 1}月的某个${phaseLabel(date)}`;
+}
+
+function formatEntropyMoment(date) {
+  const diff = getDayDiff(date);
+  if (diff <= 0) {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+  if (diff === 1) return "昨天";
+  if (diff < 7) return `上个${weekdayLabel(date)}`;
+  if (date.getFullYear() === new Date().getFullYear()) {
+    return `${date.getMonth() + 1}月的某个${phaseLabel(date)}`;
+  }
+  return `去年的一个${phaseLabel(date)}`;
 }
 
 window.TracePrediction = {
