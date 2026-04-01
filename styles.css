@@ -68,7 +68,7 @@ button, textarea { font: inherit; outline: none; border: none; background: none;
 
 .app-shell {
   position: relative;
-  width: min(100%, 680px);
+  width: min(100%, 820px);
   margin: 0 auto;
   min-height: 100vh;
   display: flex;
@@ -131,7 +131,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: 72vh;
+  min-height: 78vh;
   justify-content: center;
   position: relative;
 }
@@ -146,32 +146,33 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 .echo-panel.empty { display: none; }
 .echo-text { animation: ghostReveal 3.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
 
-.echo-event-layer {
+.echo-card-layer {
+  position: relative;
+  min-height: 0;
+}
+
+.echo-card {
   position: absolute;
   left: 0;
   right: 0;
-  top: 26px;
+  top: 2px;
   z-index: 30;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.echo-event-card {
-  width: min(100%, 32rem);
-  padding: 18px 18px 16px;
-  border-radius: 24px;
-  border: 1px solid var(--paper-border);
-  background: linear-gradient(180deg, rgba(255,255,255,0.84), rgba(255,255,255,0.72));
-  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(18px);
+  width: min(100%, 34rem);
+  margin: 0 auto 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--border-light);
+  background: rgba(127,127,127,0.06);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+  transform: translateY(8px);
   opacity: 0;
-  transform: translateY(10px);
   pointer-events: auto;
 }
 
-body.time-night .echo-event-card {
-  background: linear-gradient(180deg, rgba(31,41,55,0.92), rgba(17,24,39,0.84));
+body.time-night .echo-card {
+  background: rgba(255,255,255,0.04);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.16);
 }
 
 body.time-night .writing-card {
@@ -190,15 +191,15 @@ body.time-night .compose-footer {
   border-top-color: rgba(255,255,255,0.05);
 }
 
-.echo-event-layer.active .echo-event-card {
-  animation: echoCardIn 0.56s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.echo-card.show {
+  animation: echoCardIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.echo-event-layer.leaving .echo-event-card {
-  animation: echoCardOut 0.42s ease forwards;
+.echo-card.fade-out {
+  animation: echoCardOut 0.45s ease forwards;
 }
 
-.echo-event-close {
+.echo-card-close {
   position: absolute;
   top: 10px;
   right: 12px;
@@ -207,23 +208,31 @@ body.time-night .compose-footer {
   cursor: pointer;
 }
 
-.echo-event-line {
+.echo-card-line {
   font-family: var(--font-serif);
   color: var(--text-secondary);
   line-height: 1.78;
-  font-size: 0.95rem;
+  font-size: 0.98rem;
   padding-right: 20px;
 }
 
-.echo-event-line + .echo-event-line {
-  margin-top: 8px;
+.echo-card-line:empty {
+  display: none;
+}
+
+.echo-card-line + .echo-card-line {
+  margin-top: 6px;
+}
+
+.echo-card-tail {
+  color: var(--text-ghost);
 }
 
 .writing-card {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
-  padding: 28px 30px 20px;
+  padding: 34px 40px 24px;
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 32px;
   background:
@@ -248,8 +257,8 @@ body.time-night .compose-footer {
 .seamless-input {
   width: 100%;
   flex-grow: 1;
-  font-size: 1.35rem;
-  line-height: 1.92;
+  font-size: 1.42rem;
+  line-height: 1.95;
   color: var(--text-primary);
   resize: none;
   font-family: var(--active-writing-font);
@@ -313,12 +322,52 @@ body.focus-mode #global-tools {
 
 /* 模式层视图 */
 .history-pattern-layer {
-  padding: 16px; background: var(--accent-friction);
-  border-left: 2px solid var(--text-secondary); margin-bottom: 32px;
-  font-size: 0.9rem; color: var(--text-primary); line-height: 1.7;
-  font-family: monospace; letter-spacing: 0.02em; white-space: pre-wrap;
+  padding: 18px;
+  background: rgba(127,127,127,0.05);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  margin-bottom: 32px;
 }
 .history-pattern-layer.empty { display: none; }
+
+.insight-graph {
+  margin-bottom: 20px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.02);
+}
+
+#insight-canvas {
+  display: block;
+  width: 100%;
+  height: 300px;
+}
+
+.insight-trends {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.trend-card {
+  padding: 14px 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: rgba(255,255,255,0.02);
+}
+
+.trend-card h3 {
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text-ghost);
+}
+
+.trend-value {
+  font-size: 1.4rem;
+  color: var(--text-primary);
+  margin-top: 8px;
+}
 
 /* 时间折叠分割线 */
 .history-date-divider {
@@ -346,6 +395,18 @@ body.focus-mode #global-tools {
 .history-time { font-size: 0.8rem; color: var(--text-ghost); font-family: monospace; }
 .history-metadata { font-size: 0.75rem; color: var(--text-primary); font-weight: 500;}
 .history-friction { font-size: 0.7rem; color: var(--text-ghost); background: var(--accent-friction); padding: 2px 6px; border-radius: 4px;}
+.history-delete-btn {
+  margin-left: auto;
+  color: var(--text-ghost);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  opacity: 0.68;
+}
+.history-delete-btn:hover {
+  color: var(--text-primary);
+  opacity: 1;
+}
 
 .history-raw-text { 
   font-size: 0.98rem;
@@ -389,6 +450,6 @@ body.focus-mode #global-tools {
   .compose-shell { min-height: calc(100vh - 48px); }
   .footer-actions { gap: 18px; }
   .app-shell { padding: 34px 18px 22px; }
-  .echo-event-layer { top: 12px; }
-  .echo-event-card { width: calc(100% - 8px); border-radius: 20px; }
+  .echo-card { width: calc(100% - 8px); border-radius: 20px; }
+  .insight-trends { grid-template-columns: 1fr; }
 }

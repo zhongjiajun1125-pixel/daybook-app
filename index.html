@@ -59,12 +59,12 @@
       <section id="compose-view" class="view-section hidden">
         <div class="compose-shell">
           <aside id="system-echo-panel" class="echo-panel empty" aria-live="polite"></aside>
-          <div id="echo-event-layer" class="echo-event-layer hidden" aria-live="polite">
-            <article id="echo-event-card" class="echo-event-card" role="status">
-              <button id="echo-event-close" class="echo-event-close" type="button" aria-label="关闭">×</button>
-              <p id="echo-observation" class="echo-event-line"></p>
-              <p id="echo-pattern" class="echo-event-line"></p>
-              <p id="echo-open-loop" class="echo-event-line"></p>
+          <div id="echo-card-layer" class="echo-card-layer" aria-live="polite" aria-atomic="true">
+            <article id="echo-card" class="echo-card hidden">
+              <button id="echo-card-close" class="echo-card-close" type="button" aria-label="关闭">×</button>
+              <p id="echo-card-line-1" class="echo-card-line"></p>
+              <p id="echo-card-line-2" class="echo-card-line"></p>
+              <p id="echo-card-line-3" class="echo-card-line echo-card-tail"></p>
             </article>
           </div>
 
@@ -104,7 +104,15 @@
           <button id="close-history-btn" class="close-btn" type="button">返回</button>
         </div>
         
-        <div id="history-pattern-layer" class="history-pattern-layer empty"></div>
+        <div id="history-pattern-layer" class="history-pattern-layer empty">
+          <div class="insight-graph">
+            <canvas id="insight-canvas"></canvas>
+          </div>
+          <div class="insight-trends">
+            <div id="trend-energy" class="trend-card"></div>
+            <div id="trend-focus" class="trend-card"></div>
+          </div>
+        </div>
         
         <div class="history-list" id="history-list"></div>
       </aside>
@@ -117,6 +125,7 @@
             <time class="history-time"></time>
             <span class="history-metadata hidden"></span>
             <span class="history-friction hidden"></span>
+            <button class="history-delete-btn" type="button">删除</button>
           </div>
           <p class="history-raw-text"></p>
         </div>

@@ -9,6 +9,7 @@ const DRAFT_KEY = "trace-draft-v1";
 const LAST_ACTIVE_KEY = "trace-last-active";
 const FONT_STYLE_KEY = "trace-font-style";
 const BIO_KEY = "trace-bio-enrolled";
+const SYSTEM_STATE_KEY = "trace_system_v1";
 
 const SYSTEM_PROMPT_V1 = `
 你不是助手，不是心理医生，也不是安慰者。
@@ -45,12 +46,12 @@ const elements = {
   enterWritingBtn: document.getElementById("enter-writing-btn"),
   composeView: document.getElementById("compose-view"),
   systemEchoPanel: document.getElementById("system-echo-panel"),
-  echoEventLayer: document.getElementById("echo-event-layer"),
-  echoEventCard: document.getElementById("echo-event-card"),
-  echoEventClose: document.getElementById("echo-event-close"),
-  echoObservation: document.getElementById("echo-observation"),
-  echoPattern: document.getElementById("echo-pattern"),
-  echoOpenLoop: document.getElementById("echo-open-loop"),
+  echoCardLayer: document.getElementById("echo-card-layer"),
+  echoCard: document.getElementById("echo-card"),
+  echoCardClose: document.getElementById("echo-card-close"),
+  echoCardLine1: document.getElementById("echo-card-line-1"),
+  echoCardLine2: document.getElementById("echo-card-line-2"),
+  echoCardLine3: document.getElementById("echo-card-line-3"),
   fontStyleLabel: document.getElementById("font-style-label"),
   rawMemoryInput: document.getElementById("raw-memory-input"),
   anchorBtns: document.querySelectorAll(".anchor-btn"),
@@ -59,6 +60,9 @@ const elements = {
   swallowBtn: document.getElementById("swallow-btn"),
   historyPanel: document.getElementById("history-panel"),
   historyPatternLayer: document.getElementById("history-pattern-layer"),
+  insightCanvas: document.getElementById("insight-canvas"),
+  trendEnergy: document.getElementById("trend-energy"),
+  trendFocus: document.getElementById("trend-focus"),
   historyList: document.getElementById("history-list"),
   historyEntryTemplate: document.getElementById("history-entry-template"),
   closeHistoryBtn: document.getElementById("close-history-btn"),
@@ -73,6 +77,10 @@ let state = {
   activeAnchor: null,
   fontStyle: window.localStorage.getItem(FONT_STYLE_KEY) || "system",
   bioEnrolled: window.localStorage.getItem(BIO_KEY) === "1",
+  echoChain: {},
+  pendingEcho: null,
+  lastEchoText: null,
+  echoCooldownUntil: 0,
 };
 
 let implicitSession = {
@@ -81,7 +89,7 @@ let implicitSession = {
   hasTyped: false,
 };
 
-let echoEventTimer = null;
+let echoCardTimer = null;
 
 const health = {
   dbReady: false,
@@ -198,7 +206,45 @@ const db = {
       tx.oncomplete = () => resolve();
     });
   },
+  async delete(id) {
+    if (!this.instance) return;
+    const tx = this.instance.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(id);
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve();
+    });
+  },
 };
+
+function persistSystemState() {
+  window.localStorage.setItem(
+    SYSTEM_STATE_KEY,
+    JSON.stringify({
+      echoChain: state.echoChain,
+      pendingEcho: state.pendingEcho,
+      lastEchoText: state.lastEchoText,
+      echoCooldownUntil: state.echoCooldownUntil,
+    }),
+  );
+}
+
+function loadSystemState() {
+  const raw = window.localStorage.getItem(SYSTEM_STATE_KEY);
+  if (!raw) return;
+
+  try {
+    const data = JSON.parse(raw);
+    state.echoChain = data.echoChain || {};
+    state.pendingEcho = data.pendingEcho || null;
+    state.lastEchoText = data.lastEchoText || null;
+    state.echoCooldownUntil = data.echoCooldownUntil || 0;
+  } catch {
+    state.echoChain = {};
+    state.pendingEcho = null;
+    state.lastEchoText = null;
+    state.echoCooldownUntil = 0;
+  }
+}
 
 let audioCtx = null;
 
@@ -464,8 +510,8 @@ function bindEvents() {
     });
   }
 
-  if (elements.echoEventClose) {
-    elements.echoEventClose.addEventListener("click", hideEchoEvent);
+  if (elements.echoCardClose) {
+    elements.echoCardClose.addEventListener("click", () => hideEchoCard());
   }
 
   if (elements.exportBtn) {
@@ -514,11 +560,18 @@ async function submitEntry() {
       friction,
       timePhase,
     },
+    tags: {
+      emotion: null,
+      keywords: [],
+    },
+    system: {
+      weight: 0,
+      echo: null,
+      echoLevel: null,
+      echoType: null,
+    },
     metadata: state.activeAnchor ? { anchor: state.activeAnchor } : null,
   };
-
-  entry.analysis = AIEngine.analyze(entry, [entry, ...state.entries.filter((item) => item.id !== entry.id)]);
-  const shouldTriggerEvent = shouldTriggerEchoEvent(entry);
 
   elements.rawMemoryInput.blur();
   elements.rawMemoryInput.classList.add("ink-dissolve");
@@ -534,22 +587,34 @@ async function submitEntry() {
     elements.saveStatus.textContent = "已封存";
   }, 280);
 
-  window.setTimeout(() => {
-    resetComposeState();
-    elements.saveStatus.textContent = "";
-  }, 820);
+  window.setTimeout(async () => {
+    elements.rawMemoryInput.value = "";
+    elements.rawMemoryInput.classList.remove("ink-dissolve");
+    state.draft = "";
+    state.editingId = null;
+    state.activeAnchor = null;
+    window.localStorage.removeItem(DRAFT_KEY);
+    elements.anchorBtns.forEach((button) => button.classList.remove("active"));
+    elements.saveStatus.textContent = "已封存";
 
-  if (shouldTriggerEvent) {
-    window.setTimeout(() => {
-      showEchoEvent(entry);
-    }, 460);
-  } else {
-    window.setTimeout(() => {
-      hideEchoEvent(true);
-    }, 320);
-  }
+    await silentAnalyze(entry);
+    triggerSystemEcho();
 
-  renderEchoBlock(entry.analysis.response);
+    if (entry.system?.echo) {
+      window.setTimeout(() => {
+        showEchoCard(entry.system.echo);
+      }, 360);
+    } else {
+      hideEchoCard(true);
+    }
+
+    window.setTimeout(() => {
+      elements.saveStatus.textContent = "";
+    }, 2000);
+
+    implicitSession = { startMs: null, backspaceCount: 0, hasTyped: false };
+  }, 800);
+
   runHealthChecks();
 }
 
@@ -615,110 +680,297 @@ function renderEchoBlock(response) {
   });
 }
 
-function shouldTriggerEchoEvent(entry) {
-  const interpretation = entry.analysis?.interpretation;
-  if (!interpretation?.should_echo) return false;
+async function silentAnalyze(entry) {
+  entry.tags = {
+    emotion: detectEmotion(entry.content || "", entry),
+    keywords: extractKeywords(entry.content || ""),
+  };
+  entry.system.weight = calculateWeight(entry, state.entries);
+  entry.analysis = AIEngine.analyze(entry, [entry, ...state.entries.filter((item) => item.id !== entry.id)]);
 
-  return (
-    interpretation.confidence >= 0.48 ||
-    Boolean(interpretation.core_tension) ||
-    Boolean(interpretation.pattern_link) ||
-    entry.context.friction >= 4 ||
-    entry.context.durationSec >= 35
-  );
+  const echoResult = scheduleEcho(entry, state.entries);
+
+  if (echoResult?.immediate) {
+    entry.system.echo = echoResult.text;
+    entry.system.echoLevel = echoResult.level;
+    entry.system.echoType = echoResult.type || null;
+  } else if (echoResult?.delayed) {
+    state.pendingEcho = {
+      text: echoResult.text,
+      createdAt: Date.now(),
+      level: echoResult.level,
+      sourceEntryId: entry.id,
+    };
+    persistSystemState();
+  }
+
+  await db.put(entry);
+  upsertStateEntry(entry);
 }
 
-function buildEchoEvent(entry) {
-  const interpretation = entry.analysis?.interpretation || {};
-  const response = entry.analysis?.response || {};
-  const observation = buildEventObservation(entry, interpretation);
-  const pattern = buildEventPattern(entry, interpretation);
-  const openLoop = buildEventOpenLoop(response, interpretation);
+function calculateWeight(entry, recentEntries) {
+  let weight = 0;
+
+  const friction = entry.context?.friction || 0;
+  const timePhase = entry.context?.timePhase;
+
+  if (friction >= 8) weight += 2;
+  if (friction >= 15) weight += 3;
+  if (timePhase === "深夜") weight += 2;
+
+  const keywords = extractKeywords(entry.content || "");
+  const recentKeywords = recentEntries.flatMap((item) => item.tags?.keywords || []);
+
+  keywords.forEach((keyword) => {
+    if (recentKeywords.filter((recentKeyword) => recentKeyword === keyword).length >= 2) {
+      weight += 2;
+    }
+  });
+
+  return weight;
+}
+
+function scheduleEcho(entry, allEntries) {
+  if (Date.now() < state.echoCooldownUntil) return null;
+
+  const recent = allEntries.slice(0, 12);
+  const patterns = detectPatterns(recent, entry);
+
+  if (!patterns.length) return null;
+
+  const top = patterns[0];
+  const key = top.type;
+
+  if (!state.echoChain[key]) {
+    state.echoChain[key] = { count: 0, lastTimestamp: 0 };
+  }
+
+  const chain = state.echoChain[key];
+  chain.count += 1;
+  chain.lastTimestamp = Date.now();
+
+  const level = Math.min(chain.count, 3);
+  const text = buildEcho(top, level);
+  const textHash = JSON.stringify(text);
+
+  if (state.lastEchoText === textHash) return null;
+  state.lastEchoText = textHash;
+  state.echoCooldownUntil = Date.now() + (level >= 3 ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000);
+  persistSystemState();
+
+  if (level >= 3 || entry.system.weight >= 6) {
+    return {
+      delayed: true,
+      text,
+      level,
+    };
+  }
 
   return {
-    observation,
-    pattern,
-    openLoop,
+    immediate: true,
+    text,
+    level,
+    type: top.type || null,
   };
 }
 
-function buildEventObservation(entry, interpretation) {
-  if (entry.metadata?.anchor === "游离") {
-    return "你刚刚留下的是一段还在散开的想法。";
+function buildEcho(pattern, level) {
+  const { type } = pattern;
+
+  if (type === "repeat") {
+    if (level === 1) {
+      return {
+        l1: "某个内容再次出现。",
+        l2: "",
+        l3: "",
+        level,
+      };
+    }
+    if (level === 2) {
+      return {
+        l1: "某个内容再次出现。",
+        l2: "它在不同时间重复出现。",
+        l3: "",
+        level,
+      };
+    }
+    return {
+      l1: "某个内容再次出现。",
+      l2: "它在不同时间重复出现。",
+      l3: "但没有继续展开。",
+      level,
+    };
   }
-  if (entry.metadata?.anchor === "焦滞") {
-    return "你现在更像是在围着一个卡住的点慢慢靠近。";
+
+  if (type === "time") {
+    return {
+      l1: "一些内容总是在相似的时段出现。",
+      l2: "",
+      l3: "",
+      level,
+    };
   }
-  if (entry.metadata?.anchor === "沉缩") {
-    return "你刚刚留下的是一段往内收的记录。";
+
+  if (type === "friction") {
+    if (level === 1) {
+      return {
+        l1: "这段记录有一些停顿。",
+        l2: "",
+        l3: "",
+        level,
+      };
+    }
+    if (level === 2) {
+      return {
+        l1: "这段记录存在停顿。",
+        l2: "你在反复修改。",
+        l3: "",
+        level,
+      };
+    }
+    return {
+      l1: "这段记录存在停顿。",
+      l2: "你在反复修改。",
+      l3: "某个点没有被写出来。",
+      level,
+    };
   }
-  if (interpretation.topic_entities?.[0]) {
-    return `你现在更像是在试着碰一碰「${interpretation.topic_entities[0]}」这件事。`;
+
+  if (type === "open_loop") {
+    return {
+      l1: "有一个内容持续被提到。",
+      l2: "它一直没有变化。",
+      l3: "也没有继续往下发展。",
+      level,
+    };
   }
-  return "你刚刚留下的是一段还没有完全说完的话。";
+
+  return {
+    l1: pattern.text?.l1 || "",
+    l2: pattern.text?.l2 || "",
+    l3: pattern.text?.l3 || "",
+    level,
+  };
 }
 
-function buildEventPattern(entry, interpretation) {
-  if (entry.context.friction >= 6) {
-    return `这次记录里出现了明显的反复修改，停顿也比平时更重。`;
+function detectPatterns(recentEntries, currentEntry) {
+  const patterns = [];
+  const keywords = recentEntries.flatMap((entry) => entry.tags?.keywords || []);
+  const frictions = recentEntries.map((entry) => entry.context?.friction || 0);
+  const timePhases = recentEntries.map((entry) => entry.context?.timePhase);
+  const contents = recentEntries.map((entry) => entry.content || "");
+
+  const keywordFrequency = {};
+  keywords.forEach((keyword) => {
+    keywordFrequency[keyword] = (keywordFrequency[keyword] || 0) + 1;
+  });
+  const topKeyword = Object.entries(keywordFrequency).sort((left, right) => right[1] - left[1])[0];
+
+  if (topKeyword && topKeyword[1] >= 3) {
+    patterns.push({
+      type: "repeat",
+      level: 1,
+      key: topKeyword[0],
+    });
   }
-  if (entry.context.durationSec >= 45) {
-    return "这次的停顿发生在你快要把它说清楚的时候。";
+
+  const timeFrequency = {};
+  timePhases.forEach((timePhase) => {
+    if (timePhase) timeFrequency[timePhase] = (timeFrequency[timePhase] || 0) + 1;
+  });
+  const topTime = Object.entries(timeFrequency).sort((left, right) => right[1] - left[1])[0];
+
+  if (topTime && topTime[1] >= 3) {
+    patterns.push({
+      type: "time",
+      level: 2,
+      key: topTime[0],
+    });
   }
-  if (interpretation.pattern_link) {
-    return interpretation.pattern_link.replace("。", "，");
+
+  const avgFriction = frictions.length ? frictions.reduce((sum, value) => sum + value, 0) / frictions.length : 0;
+  if (avgFriction >= 8) {
+    patterns.push({
+      type: "friction",
+      level: 2,
+    });
   }
-  if (interpretation.core_tension) {
-    return `这段记录中出现了${interpretation.core_tension.replace("。", "")}。`;
+
+  const openLoopHits = contents.filter((text) => ["想", "应该", "但是"].some((anchor) => text.includes(anchor))).length;
+  if (openLoopHits >= 3) {
+    patterns.push({
+      type: "open_loop",
+      level: 3,
+    });
   }
-  return "这段记录里有一部分已经露出来了。";
+
+  return patterns.sort((left, right) => right.level - left.level);
 }
 
-function buildEventOpenLoop(response, interpretation) {
-  if (response.question) {
-    return `但${response.question.replace(/[？?]$/, "")}。`;
+function showEchoCard(payload) {
+  if (!payload) return;
+
+  elements.echoCardLine1.textContent = payload.l1 || "";
+  elements.echoCardLine2.textContent = payload.l2 || "";
+  elements.echoCardLine3.textContent = payload.l3 || "";
+  if ((payload.level || 0) >= 3) {
+    elements.echoCard.style.borderColor = "rgba(255,255,255,0.12)";
+  } else {
+    elements.echoCard.style.borderColor = "";
   }
-  if (interpretation.pattern_link) {
-    return "但有些地方还没有真正展开。";
-  }
-  return "但它还停在一个没有继续展开的位置。";
-}
 
-function showEchoEvent(entry) {
-  const event = buildEchoEvent(entry);
-  elements.echoObservation.textContent = event.observation;
-  elements.echoPattern.textContent = event.pattern;
-  elements.echoOpenLoop.textContent = event.openLoop;
+  elements.echoCard.classList.remove("hidden", "fade-out", "show");
+  void elements.echoCard.offsetWidth;
+  elements.echoCard.classList.add("show");
 
-  elements.echoEventLayer.classList.remove("hidden", "leaving");
-  void elements.echoEventCard.offsetWidth;
-  elements.echoEventLayer.classList.add("active");
-
-  if (echoEventTimer) window.clearTimeout(echoEventTimer);
-  echoEventTimer = window.setTimeout(() => {
-    hideEchoEvent();
+  if (echoCardTimer) window.clearTimeout(echoCardTimer);
+  echoCardTimer = window.setTimeout(() => {
+    hideEchoCard();
   }, 4800);
 }
 
-function hideEchoEvent(immediate = false) {
-  if (echoEventTimer) {
-    window.clearTimeout(echoEventTimer);
-    echoEventTimer = null;
+function hideEchoCard(immediate = false) {
+  if (echoCardTimer) {
+    window.clearTimeout(echoCardTimer);
+    echoCardTimer = null;
   }
 
   if (immediate) {
-    elements.echoEventLayer.classList.add("hidden");
-    elements.echoEventLayer.classList.remove("active", "leaving");
+    elements.echoCard.classList.add("hidden");
+    elements.echoCard.classList.remove("fade-out", "show");
     return;
   }
 
-  if (elements.echoEventLayer.classList.contains("hidden")) return;
-  elements.echoEventLayer.classList.remove("active");
-  elements.echoEventLayer.classList.add("leaving");
+  if (elements.echoCard.classList.contains("hidden")) return;
+  elements.echoCard.classList.remove("show");
+  elements.echoCard.classList.add("fade-out");
   window.setTimeout(() => {
-    elements.echoEventLayer.classList.add("hidden");
-    elements.echoEventLayer.classList.remove("leaving");
+    elements.echoCard.classList.add("hidden");
+    elements.echoCard.classList.remove("fade-out");
   }, 420);
+}
+
+function checkPendingEchoOnBoot() {
+  if (!state.pendingEcho) return;
+
+  const delay = 1000 * 60 * 60 * 4;
+  if (Date.now() - state.pendingEcho.createdAt < delay) return;
+
+  showEchoCard(state.pendingEcho.text);
+  state.pendingEcho = null;
+  persistSystemState();
+}
+
+function cleanupEchoChain() {
+  const now = Date.now();
+
+  Object.keys(state.echoChain).forEach((key) => {
+    if (now - (state.echoChain[key]?.lastTimestamp || 0) > 72 * 60 * 60 * 1000) {
+      delete state.echoChain[key];
+    }
+  });
+
+  persistSystemState();
 }
 
 function cycleFontStyle() {
@@ -747,9 +999,11 @@ function applyFontStyle(style) {
 function renderHistory() {
   elements.historyList.innerHTML = "";
   if (elements.historyPatternLayer) {
-    const topology = buildTopologySummary(state.entries);
-    elements.historyPatternLayer.textContent = topology || "";
-    elements.historyPatternLayer.classList.toggle("empty", !topology);
+    const hasInsight = state.entries.length > 0;
+    elements.historyPatternLayer.classList.toggle("empty", !hasInsight);
+    if (hasInsight) {
+      renderInsightViewV2();
+    }
   }
 
   if (!state.entries.length) {
@@ -791,17 +1045,29 @@ function renderHistory() {
       frictionNode.classList.remove("hidden");
     }
 
+    const deleteBtn = node.querySelector(".history-delete-btn");
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        await deleteEntry(entry.id);
+      });
+    }
+
     const textNode = node.querySelector(".history-raw-text");
     const echoNode = node.querySelector(".history-echo-text");
     const secondaryNode = node.querySelector(".history-secondary");
     textNode.textContent = summarizeHistoryContent(entry.content || "[空白记录]");
-    const responseParts = [
-      entry.analysis?.response?.echo,
-      entry.analysis?.response?.question,
-      entry.analysis?.response?.pattern_hint,
-    ].filter(Boolean);
-    if (echoNode && secondaryNode && responseParts.length) {
-      echoNode.textContent = summarizeHistoryEcho(responseParts);
+    const echoSummary = entry.system?.echo?.l1
+      ? `${entry.system.echo.l1} ${entry.system.echo.l2 || ""}`.trim()
+      : summarizeHistoryEcho(
+          [
+            entry.analysis?.response?.echo,
+            entry.analysis?.response?.question,
+            entry.analysis?.response?.pattern_hint,
+          ].filter(Boolean),
+        );
+    if (echoNode && secondaryNode && echoSummary) {
+      echoNode.textContent = echoSummary;
       secondaryNode.classList.remove("hidden");
     }
 
@@ -809,6 +1075,139 @@ function renderHistory() {
     node.addEventListener("click", () => loadEntryForEdit(entry.id));
     elements.historyList.appendChild(node);
   });
+}
+
+function buildGraph(entries) {
+  const nodes = {};
+  const edges = {};
+  const recent = entries.slice(0, 30);
+
+  recent.forEach((entry) => {
+    const keys = [...(entry.tags?.keywords || [])];
+    const emotionAnchor = entry.metadata?.anchor;
+
+    if (emotionAnchor) keys.push(emotionAnchor);
+
+    keys.forEach((key) => {
+      if (!nodes[key]) {
+        nodes[key] = { id: key, weight: 0 };
+      }
+      nodes[key].weight += 1;
+    });
+
+    for (let index = 0; index < keys.length; index += 1) {
+      for (let inner = index + 1; inner < keys.length; inner += 1) {
+        const edgeKey = [keys[index], keys[inner]].sort().join("-");
+        edges[edgeKey] = (edges[edgeKey] || 0) + 1;
+      }
+    }
+  });
+
+  return { nodes, edges };
+}
+
+function renderGraph() {
+  const canvas = elements.insightCanvas;
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  canvas.width = canvas.offsetWidth;
+  canvas.height = 300;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const { nodes, edges } = buildGraph(state.entries);
+  const nodeList = Object.values(nodes);
+  const edgeList = Object.entries(edges);
+
+  if (!nodeList.length) return;
+
+  const positionedNodes = nodeList.map((node, index) => {
+    const angle = (Math.PI * 2 * index) / Math.max(nodeList.length, 1);
+    const radius = Math.min(canvas.width, canvas.height) * 0.26 + node.weight * 2;
+    const x = canvas.width / 2 + Math.cos(angle) * radius * (index % 2 === 0 ? 0.9 : 0.6);
+    const y = canvas.height / 2 + Math.sin(angle) * radius * 0.58;
+    return {
+      ...node,
+      x,
+      y,
+      size: Math.min(node.weight * 3, 20),
+    };
+  });
+
+  edgeList.forEach(([edgeKey, weight]) => {
+    const [sourceId, targetId] = edgeKey.split("-");
+    const source = positionedNodes.find((node) => node.id === sourceId);
+    const target = positionedNodes.find((node) => node.id === targetId);
+    if (!source || !target) return;
+
+    ctx.beginPath();
+    ctx.moveTo(source.x, source.y);
+    ctx.lineTo(target.x, target.y);
+    ctx.strokeStyle = `rgba(160, 160, 160, ${Math.min(0.14 + weight * 0.05, 0.38)})`;
+    ctx.lineWidth = Math.min(1 + weight * 0.4, 2.6);
+    ctx.stroke();
+  });
+
+  positionedNodes.forEach((node) => {
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(200, 200, 200, 0.58)";
+    ctx.fill();
+
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--text-primary").trim() || "#fff";
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+    ctx.fillText(node.id, node.x + node.size + 4, node.y + 4);
+  });
+}
+
+function calculateEnergyTrend(entries) {
+  const recent = entries.slice(0, 10);
+  let score = 0;
+
+  recent.forEach((entry) => {
+    const anchor = entry.metadata?.anchor;
+    if (anchor === "澄明") score += 2;
+    if (anchor === "焦滞") score -= 1;
+    if (anchor === "沉缩") score -= 2;
+  });
+
+  if (score > 5) return "上升";
+  if (score < -5) return "下降";
+  return "波动";
+}
+
+function calculateFocusTrend(entries) {
+  const recent = entries.slice(0, 10);
+  if (!recent.length) return "稳定";
+
+  const avgFriction = recent.reduce((sum, entry) => sum + (entry.context?.friction || 0), 0) / recent.length;
+  if (avgFriction < 4) return "稳定";
+  if (avgFriction < 8) return "波动";
+  return "下降";
+}
+
+function renderTrends() {
+  if (!elements.trendEnergy || !elements.trendFocus) return;
+
+  const energy = calculateEnergyTrend(state.entries);
+  const focus = calculateFocusTrend(state.entries);
+
+  elements.trendEnergy.innerHTML = `
+    <h3>能量趋势</h3>
+    <div class="trend-value">${energy}</div>
+  `;
+
+  elements.trendFocus.innerHTML = `
+    <h3>专注趋势</h3>
+    <div class="trend-value">${focus}</div>
+  `;
+}
+
+function renderInsightViewV2() {
+  renderGraph();
+  renderTrends();
 }
 
 function loadEntryForEdit(id) {
@@ -828,6 +1227,29 @@ function loadEntryForEdit(id) {
   state.historyOpen = false;
   elements.rawMemoryInput.focus();
   renderEchoBlock(entry.analysis?.response || { echo: "", question: "", pattern_hint: "" });
+}
+
+async function deleteEntry(id) {
+  const entry = state.entries.find((item) => item.id === id);
+  if (!entry) return;
+
+  const confirmed = window.confirm("删除这条记录？\n它会从这台设备里移除，之后不能恢复。");
+  if (!confirmed) return;
+
+  await db.delete(id);
+  state.entries = state.entries.filter((item) => item.id !== id);
+
+  if (state.editingId === id) {
+    resetComposeState();
+    hideEchoCard(true);
+    renderEchoBlock({ echo: "", question: "", pattern_hint: "" });
+  }
+
+  if (state.historyOpen) {
+    renderHistory();
+  }
+
+  runHealthChecks();
 }
 
 function showView(viewName) {
@@ -967,6 +1389,16 @@ function normalizeEntries(entries) {
         friction: Number.isFinite(entry.context?.friction) ? entry.context.friction : 0,
         timePhase: entry.context?.timePhase || resolveTimePhase(new Date(entry.timestamp || Date.now())),
       },
+      tags: {
+        emotion: entry.tags?.emotion || null,
+        keywords: Array.isArray(entry.tags?.keywords) ? entry.tags.keywords : [],
+      },
+      system: {
+        weight: Number.isFinite(entry.system?.weight) ? entry.system.weight : 0,
+        echo: entry.system?.echo || null,
+        echoLevel: entry.system?.echoLevel || null,
+        echoType: entry.system?.echoType || null,
+      },
       metadata: entry.metadata || null,
       analysis: entry.analysis || null,
     }))
@@ -980,7 +1412,15 @@ async function reanalyzeEntriesIfNeeded() {
   for (let index = 0; index < state.entries.length; index += 1) {
     const entry = state.entries[index];
     const previousEntries = [...rebuilt, ...state.entries.slice(index + 1)];
-    if (!entry.analysis?.response?.echo && !entry.analysis?.response?.question) {
+    if (
+      !entry.analysis?.response?.echo &&
+      !entry.analysis?.response?.question &&
+      !entry.tags?.emotion
+    ) {
+      entry.tags = {
+        emotion: detectEmotion(entry.content || "", entry),
+        keywords: extractKeywords(entry.content || "", entry),
+      };
       entry.analysis = AIEngine.analyze(entry, [entry, ...previousEntries.filter((item) => item.id !== entry.id)]);
       await db.put(entry);
       changed = true;
@@ -1018,6 +1458,15 @@ function inferTopics(text, entry) {
   }
 
   return topics.slice(0, 3);
+}
+
+function detectEmotion(text, entry) {
+  return inferSurfaceEmotion(text, entry);
+}
+
+function extractKeywords(text) {
+  const anchors = ["累", "不想", "想", "换", "烦", "焦虑", "逃", "困"];
+  return anchors.filter((anchor) => text.includes(anchor));
 }
 
 function inferDefenseSignal(text, entry) {
@@ -1187,7 +1636,13 @@ function summarizeHistoryEcho(parts) {
   return `${firstLine.slice(0, 42)}…`;
 }
 
-window.addEventListener("load", init);
+window.addEventListener("load", async () => {
+  init();
+  loadSystemState();
+  await bootSystem();
+  cleanupEchoChain();
+  checkPendingEchoOnBoot();
+});
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
