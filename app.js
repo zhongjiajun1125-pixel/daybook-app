@@ -1,6 +1,6 @@
 /**
- * Trace - 认知显影系统 (Engineering v2.1)
- * 补全：高频删改判定、重度斟酌标签、打字时长记录
+ * Trace - 认知显影系统 (Engineering v2.5)
+ * 核心升级：幽灵锚点注入 + 冲突模式识别引擎
  */
 
 const DB_NAME = "TraceCognitionDB";
@@ -21,6 +21,7 @@ const elements = {
   composeView: document.getElementById("compose-view"),
   systemEchoPanel: document.getElementById("system-echo-panel"),
   rawMemoryInput: document.getElementById("raw-memory-input"),
+  anchorBtns: document.querySelectorAll(".anchor-btn"),
   saveStatus: document.getElementById("save-status"),
   saveEntryBtn: document.getElementById("save-entry-btn"),
   swallowBtn: document.getElementById("swallow-btn"),
@@ -35,10 +36,11 @@ let state = {
   draft: localStorage.getItem(DRAFT_KEY) || "", 
   historyOpen: false,
   editingId: null,
-  isLoaded: false 
+  isLoaded: false,
+  activeAnchor: null // 潜意识锚点状态
 };
 
-// 核心指标：打字时长与摩擦力记录
+// 核心物理指标追踪
 let implicitSession = { startMs: null, backspaceCount: 0 };
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -59,11 +61,44 @@ function playTraceFeedback() {
   osc.stop(now + 0.6);
 }
 
+// ----------------------------------------------------------------------
+// Pattern Engine v2 - 认知模式引擎 (客观映射，不予评判)
+// ----------------------------------------------------------------------
+const PatternEngine = {
+  analyze(entries) {
+    if (!entries || entries.length === 0) return null;
+    const latest = entries[0];
+    const recent5 = entries.slice(0, 5);
+
+    // 1. 冲突侦测 (Conflict) —— 主观锚点与客观物理阻力的对撞
+    if (latest.metadata && latest.metadata.anchor === "澄明" && latest.context.friction >= 8) {
+      return `你刚刚的主观标记为「澄明」，但输入行为产生了高频修改（${latest.context.friction}次退格）。你的潜意识中存在未消除的认知摩擦。`;
+    }
+    if (latest.metadata && latest.metadata.anchor === "焦滞" && latest.context.durationSec < 10 && latest.context.friction <= 1) {
+      return `你在极短的时间内毫无阻力地留下了「焦滞」锚点。这符合本能情绪宣泄的特征，而非深度反刍。`;
+    }
+
+    // 2. 重复侦测 (Repetition) —— 状态淤积
+    const recentAnchors = recent5.map(e => e.metadata?.anchor).filter(Boolean);
+    if (recentAnchors.length >= 3 && recentAnchors.every(a => a === recentAnchors[0])) {
+      return `过去多次记录，你的认知锚点始终停留在「${recentAnchors[0]}」。系统未观测到状态的流动或破局动作。`;
+    }
+
+    // 3. 漂移侦测 (Drift) —— 边缘时间收缩
+    const lateNight = recent5.filter(e => e.context.timePhase === "深夜");
+    if (lateNight.length >= 3 && latest.context.timePhase === "深夜") {
+      return "连续的深度输出均发生于深夜。系统感知到你的活跃认知周期正在向边缘时间偏移。";
+    }
+
+    return null;
+  }
+};
+
 const db = {
   instance: null,
   async init() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1);
+      const request = indexedDB.open(DB_NAME, 2); // 升级 DB 版本
       request.onupgradeneeded = (e) => {
         const _db = e.target.result;
         if (!_db.objectStoreNames.contains(STORE_NAME)) _db.createObjectStore(STORE_NAME, { keyPath: "id" });
@@ -133,7 +168,7 @@ async function bootSystem() {
     state.isLoaded = true;
     elements.rawMemoryInput.value = state.draft;
     if (!state.entries || state.entries.length === 0) showView("onboarding");
-    else { showView("compose"); checkSystemEcho(); }
+    else { showView("compose"); triggerSystemEcho(); }
   } catch (err) {
     elements.unlockBtn.textContent = "系统核心启动失败";
   }
@@ -181,6 +216,22 @@ function bindEvents() {
     localStorage.setItem(DRAFT_KEY, state.draft);
   });
 
+  // 绑定锚点幽灵按钮
+  elements.anchorBtns.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const anchor = e.target.dataset.anchor;
+      if (state.activeAnchor === anchor) {
+        state.activeAnchor = null;
+        e.target.classList.remove("active");
+      } else {
+        elements.anchorBtns.forEach(b => b.classList.remove("active"));
+        state.activeAnchor = anchor;
+        e.target.classList.add("active");
+      }
+    });
+  });
+
   elements.saveEntryBtn.addEventListener("click", submitEntry);
   elements.swallowBtn.addEventListener("click", triggerBlackHole);
   elements.historyToggle.addEventListener("click", openHistory);
@@ -192,47 +243,43 @@ function bindEvents() {
 
 function triggerBlackHole() {
   const content = elements.rawMemoryInput.value.trim();
-  if (!content) return;
+  if (!content && !state.activeAnchor) return;
   playTraceFeedback();
   elements.rawMemoryInput.classList.add("ink-dissolve");
   document.body.classList.remove("focus-mode");
-  setTimeout(() => {
-    elements.rawMemoryInput.value = "";
-    elements.rawMemoryInput.classList.remove("ink-dissolve");
-    state.draft = "";
-    localStorage.removeItem(DRAFT_KEY);
-    state.editingId = null;
-    elements.saveStatus.textContent = "已湮灭";
-    setTimeout(() => elements.saveStatus.textContent = "", 2000);
-  }, 800);
+  setTimeout(resetComposeState, 800);
 }
 
 async function submitEntry() {
   const content = elements.rawMemoryInput.value.trim();
-  if (!content) return;
-  const now = new Date();
-  let entry;
+  // 即使没有文本，只要点了锚点也能提交（纯潜意识捕获）
+  if (!content && !state.activeAnchor) return; 
 
-  // 计算打字时长
+  const now = new Date();
   const durationSec = implicitSession.startMs ? Math.round((Date.now() - implicitSession.startMs) / 1000) : 0;
   const friction = implicitSession.backspaceCount;
+  const hour = now.getHours();
+  const timePhase = (hour < 5 || hour >= 23) ? "深夜" : (hour < 10 ? "清晨" : "日间");
+
+  let entry;
 
   if (state.editingId) {
     const oldEntry = state.entries.find(e => e.id === state.editingId);
-    entry = { ...oldEntry, content, lastModified: now.toISOString(), context: { ...oldEntry.context, isEdited: true } };
+    entry = { 
+      ...oldEntry, 
+      content, 
+      lastModified: now.toISOString(), 
+      context: { ...oldEntry.context, isEdited: true },
+      metadata: state.activeAnchor ? { anchor: state.activeAnchor } : oldEntry.metadata 
+    };
     state.editingId = null;
   } else {
-    const hour = now.getHours();
-    let timePhase = (hour < 5 || hour >= 23) ? "深夜" : (hour < 10 ? "清晨" : "日间");
     entry = {
       id: `mem-${now.getTime()}`,
       content,
       timestamp: now.toISOString(),
-      context: { 
-        durationSec, 
-        friction, 
-        timePhase 
-      }
+      context: { durationSec, friction, timePhase },
+      metadata: state.activeAnchor ? { anchor: state.activeAnchor } : null
     };
   }
 
@@ -246,51 +293,36 @@ async function submitEntry() {
   else state.entries.unshift(entry);
 
   setTimeout(() => {
-    elements.rawMemoryInput.value = "";
-    elements.rawMemoryInput.classList.remove("ink-dissolve");
-    state.draft = "";
-    localStorage.removeItem(DRAFT_KEY);
-    elements.saveStatus.textContent = "认知已封存 ✓";
+    resetComposeState();
+    elements.saveStatus.textContent = "已捕获 ✓";
     setTimeout(() => elements.saveStatus.textContent = "", 2000);
-    checkSystemEcho(); 
-    // 重置 Session 指标
-    implicitSession = { startMs: null, backspaceCount: 0 };
+    triggerSystemEcho(); 
   }, 800); 
 }
 
-// 补全：基于时长和修改频率的显影判断
-function checkSystemEcho() {
+function resetComposeState() {
+  elements.rawMemoryInput.value = "";
+  elements.rawMemoryInput.classList.remove("ink-dissolve");
+  state.draft = "";
+  localStorage.removeItem(DRAFT_KEY);
+  implicitSession = { startMs: null, backspaceCount: 0 };
+  state.activeAnchor = null;
+  elements.anchorBtns.forEach(b => b.classList.remove("active"));
+}
+
+// 引擎驱动的回声系统
+function triggerSystemEcho() {
   const panel = elements.systemEchoPanel;
   panel.innerHTML = "";
   panel.classList.add("empty");
-  if (!state.entries || state.entries.length === 0) return;
+  
+  const echoResult = PatternEngine.analyze(state.entries);
 
-  const recentEntries = state.entries.slice(0, 10);
-  const contents = recentEntries.map(e => e.content);
-  let echoText = "";
-
-  // 1. 模式判断：疲惫/焦虑
-  const fatiguePatterns = ["累", "没劲", "疲", "卷"];
-  const anxietyPatterns = ["烦", "急", "乱", "压力"];
-
-  // 2. 物理指标判断：高频删改
-  const highFrictionEntries = recentEntries.filter(e => e.context?.friction > 5);
-
-  if (contents.filter(c => fatiguePatterns.some(p => c.includes(p))).length >= 3) {
-    echoText = "系统注意到，在最近的记录频率中，“疲惫感”正在以高频切面出现。";
-  } else if (contents.filter(c => anxietyPatterns.some(p => c.includes(p))).length >= 3) {
-    echoText = "当前的认知流中充斥着高信噪比的“焦虑回声”，建议暂时剥离外部输入。";
-  } else if (highFrictionEntries.length >= 3) {
-    echoText = "系统监测到，你在记录最近几个想法时，伴随着高频的删改。";
-  } else {
-    const lateNightEntries = recentEntries.filter(e => e.context?.timePhase === "深夜");
-    if (lateNightEntries.length >= 3) echoText = "你最近的深度输出集中发生在深夜，这是“自我结构”最易显影的时刻。";
-  }
-
-  if (echoText) {
+  if (echoResult) {
     panel.classList.remove("empty");
     const p = document.createElement("p");
-    p.className = "echo-text"; p.textContent = echoText; 
+    p.className = "echo-text"; 
+    p.textContent = echoResult; 
     panel.appendChild(p);
   }
 }
@@ -309,7 +341,7 @@ async function importData(e) {
       setTimeout(() => elements.saveStatus.textContent = "", 2000);
       if (state.historyOpen) renderHistory();
     } catch (err) {
-      alert("导入失败：无效的 Trace 文件。");
+      alert("导入失败：数据结构不兼容。");
     }
   };
   reader.readAsText(file);
@@ -320,17 +352,24 @@ function exportData() {
   const blob = new Blob([dataStr], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `Trace-Export-${new Date().toISOString().split('T')[0]}.json`;
+  a.href = url; a.download = `Trace-Cognition-${new Date().toISOString().split('T')[0]}.json`;
   a.click(); URL.revokeObjectURL(url);
 }
 
 function loadEntryForEdit(id) {
   const entry = state.entries.find(e => e.id === id);
   if (!entry) return;
-  elements.rawMemoryInput.value = entry.content;
-  state.editingId = id; state.draft = entry.content;
+  elements.rawMemoryInput.value = entry.content || "";
+  state.editingId = id; state.draft = entry.content || "";
+  
+  // 恢复锚点状态
+  state.activeAnchor = entry.metadata?.anchor || null;
+  elements.anchorBtns.forEach(btn => {
+    if (btn.dataset.anchor === state.activeAnchor) btn.classList.add("active");
+    else btn.classList.remove("active");
+  });
+
   closeHistory();
-  elements.saveStatus.textContent = "正在修正记录...";
   elements.rawMemoryInput.focus();
 }
 
@@ -344,33 +383,44 @@ function showView(viewName) {
 function openHistory() { state.historyOpen = true; elements.historyPanel.classList.remove("hidden"); renderHistory(); }
 function closeHistory() { state.historyOpen = false; elements.historyPanel.classList.add("hidden"); elements.rawMemoryInput.focus(); }
 
-// 补全：历史列表中的“重度斟酌”显影判断
 function renderHistory() {
   elements.historyList.innerHTML = "";
-  if (!state.isLoaded) {
-    elements.historyList.innerHTML = '<p style="text-align: center; margin-top: 40px; opacity: 0.5;">正在加载本地认知库...</p>';
-    return;
-  }
+  if (!state.isLoaded) return;
+  
   if (!state.entries || state.entries.length === 0) {
-    elements.historyList.innerHTML = '<p style="text-align: center; margin-top: 40px; opacity: 0.5;">尚无封存记录。</p>';
+    elements.historyList.innerHTML = '<p style="text-align: center; margin-top: 40px; opacity: 0.5;">暂无切片</p>';
     return;
   }
+  
   state.entries.forEach(entry => {
     const node = elements.historyEntryTemplate.content.firstElementChild.cloneNode(true);
     const date = new Date(entry.timestamp);
     
     node.querySelector(".history-time").textContent = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
     
-    // 补全逻辑：如果摩擦力超过 5 次退格，显示标签
-    if (entry.context?.friction > 5) {
+    // 高阻力状态透出
+    if (entry.context?.friction >= 8) {
       const fNode = node.querySelector(".history-friction");
       if (fNode) {
-        fNode.textContent = "• 重度斟酌"; 
+        fNode.textContent = "• 高阻力"; 
         fNode.classList.remove("hidden");
       }
     }
 
-    node.querySelector(".history-raw-text").textContent = entry.content;
+    // 文本处理
+    if (entry.content) {
+      node.querySelector(".history-raw-text").textContent = entry.content;
+    } else {
+      node.querySelector(".history-raw-text").style.display = 'none';
+    }
+
+    // 隐式映射 Metadata 透出
+    if (entry.metadata?.anchor) {
+      const mNode = node.querySelector(".history-metadata");
+      mNode.textContent = `[ ${entry.metadata.anchor} ]`;
+      mNode.classList.remove("hidden");
+    }
+
     node.style.cursor = "pointer";
     node.addEventListener("click", () => loadEntryForEdit(entry.id));
     elements.historyList.appendChild(node);

@@ -43,10 +43,6 @@
           <p>并在未来的某一天，向你折射出潜意识的真实轨迹。</p>
           <br>
           <p>当你准备好了，留下第一道印迹。</p>
-          
-          <p style="margin-top: 48px; font-size: 0.9rem; color: var(--text-ghost); font-family: 'Songti SC', serif; letter-spacing: 0.05em;">
-            — Created by cyh
-          </p>
         </div>
         <div class="action-shell">
           <button id="enter-writing-btn" class="primary-action-btn" type="button">→ 开始记录</button>
@@ -64,6 +60,13 @@
               placeholder="写下此刻。"
               autofocus
             ></textarea>
+            
+            <div id="cognitive-anchors" class="anchor-bar">
+              <button class="anchor-btn" data-anchor="澄明">澄明</button>
+              <button class="anchor-btn" data-anchor="游离">游离</button>
+              <button class="anchor-btn" data-anchor="焦滞">焦滞</button>
+              <button class="anchor-btn" data-anchor="沉缩">沉缩</button>
+            </div>
           </article>
 
           <div class="compose-footer">
@@ -92,6 +95,7 @@
           <span class="history-friction hidden"></span>
         </div>
         <p class="history-raw-text"></p>
+        <div class="history-metadata hidden"></div>
       </article>
     </template>
 

@@ -78,10 +78,25 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 }
 .seamless-input::placeholder { color: var(--text-ghost); opacity: 0.5; }
 
+/* 认知锚点样式：极低存在感 */
+.anchor-bar {
+  display: flex; gap: 12px; padding-bottom: 16px;
+  opacity: 0.6; transition: opacity 0.3s ease;
+}
+.anchor-bar:hover { opacity: 1; }
+.anchor-btn {
+  font-size: 0.8rem; color: var(--text-ghost); 
+  border: 1px solid transparent; border-radius: 12px; 
+  padding: 4px 10px; cursor: pointer; transition: all 0.2s ease;
+}
+.anchor-btn:hover { color: var(--text-primary); border-color: var(--border-light); }
+.anchor-btn.active { color: var(--text-primary); background: var(--border-light); }
+
 .ink-dissolve { animation: dissolveOut 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; pointer-events: none; }
 
 .compose-footer {
   display: flex; justify-content: space-between; align-items: center; padding-top: 12px;
+  border-top: 1px solid var(--border-light);
   color: var(--text-ghost); font-size: 0.85rem;
 }
 .subtle-submit-btn { color: var(--text-ghost); cursor: pointer; transition: color 0.2s ease; }
@@ -109,6 +124,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
   overflow: hidden; text-overflow: ellipsis;
 }
+.history-metadata { font-size: 0.8rem; color: var(--text-ghost); margin-top: 4px; opacity: 0.6; }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
