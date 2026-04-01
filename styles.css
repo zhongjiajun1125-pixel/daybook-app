@@ -129,98 +129,59 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   letter-spacing: 0.12em;
 }
 
-.trace-brand-mark {
-  margin-bottom: 18px;
-}
-
-.trace-mark-shell {
-  --trace-size: 82px;
+.trace-logo-panel {
   position: relative;
-  width: var(--trace-size);
-  height: var(--trace-size);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-primary);
+  background-image: url("./image.png");
+  background-repeat: no-repeat;
+  background-size: 300% 100%;
+  background-position: center center;
   isolation: isolate;
 }
 
-.trace-mark-shell--brand { --trace-size: 82px; }
-.trace-mark-shell--unlock { --trace-size: 120px; }
-.trace-mark-shell--compose { --trace-size: 28px; }
-.trace-mark-shell--loading { --trace-size: 36px; }
-
-.trace-mark {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.trace-ring-base,
-.trace-ring-draw,
-.trace-ring-pulse {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  transform-origin: 60px 60px;
-  transform: rotate(-22deg);
-}
-
-.trace-ring-base {
-  stroke-width: 13;
-  stroke-dasharray: 205 52;
-  opacity: 0.96;
-}
-
-.trace-ring-draw {
-  stroke-width: 13;
-  stroke-dasharray: 205 52;
-  stroke-dashoffset: 265;
+.trace-logo-panel::after {
+  content: "";
+  position: absolute;
+  top: 7%;
+  left: 50%;
+  width: 42%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  border: 2px solid rgba(23, 23, 23, 0.18);
   opacity: 0;
+  transform: translateX(-50%) scale(0.92);
+  pointer-events: none;
 }
 
-.trace-ring-pulse {
-  stroke-width: 4;
-  opacity: 0;
+.trace-logo-panel--hero {
+  width: min(280px, 62vw);
+  aspect-ratio: 0.72;
+  margin-bottom: 18px;
 }
 
-.trace-tail {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-width: 4.5;
-  opacity: 0.95;
-  transform-origin: 60px 60px;
+.trace-logo-panel--unlock {
+  width: 220px;
+  aspect-ratio: 0.72;
+  margin-bottom: 8px;
 }
 
-.trace-tail-top { stroke-width: 3.8; }
-.trace-tail-mid { stroke-width: 4.6; }
-.trace-tail-bottom { stroke-width: 4.2; }
-
-.trace-loading.is-active .trace-mark-shell--loading .trace-ring-draw,
-.trace-mark-shell.is-loading .trace-ring-draw {
-  animation: traceLoadingWrite 1.28s cubic-bezier(0.2, 0.8, 0.22, 1) infinite;
+.trace-logo-panel--mark {
+  width: 34px;
+  aspect-ratio: 1;
+  background-size: 300% 185%;
+  background-position: 50% 14%;
 }
 
-.trace-loading.is-active .trace-mark-shell--loading .trace-tail,
-.trace-mark-shell.is-loading .trace-tail {
-  animation: traceTailLift 1.28s ease-out infinite;
+.trace-loading.is-active .trace-logo-panel--mark::after,
+.trace-logo-panel.is-loading::after {
+  animation: traceLoadingOrbit 1.18s cubic-bezier(0.22, 0.8, 0.24, 1) infinite;
 }
 
-.trace-mark-shell.is-sealing .trace-ring-draw {
-  animation: traceSealWrite 0.96s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.trace-logo-panel.is-sealing::after {
+  animation: traceSealOrbit 0.96s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.trace-mark-shell.is-sealing .trace-tail {
-  animation: traceTailRise 0.84s ease-out forwards;
-}
-
-.trace-mark-shell.is-echo .trace-ring-pulse {
-  animation: traceEchoPulse 0.82s ease-out forwards;
-}
-
-.trace-mark-shell.is-echo .trace-ring-base {
-  animation: traceEchoGlint 0.82s ease-out forwards;
+.trace-logo-panel.is-echo::after {
+  animation: traceEchoOrbit 0.82s ease-out forwards;
 }
 
 .narrative-shell {
@@ -234,7 +195,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   font-size: 0.75rem;
   letter-spacing: 0.18em;
   color: var(--text-ghost);
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.95rem;
 }
 .hero-text {
   font-size: clamp(1.35rem, 2vw, 1.75rem);
@@ -417,8 +378,8 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 }
 .pin-action-btn:active { transform: scale(0.96); }
 
-body.time-night .unlock-orb {
-  color: #f8fafc;
+body.time-night .trace-logo-panel {
+  filter: invert(1);
 }
 
 .compose-shell {
@@ -809,83 +770,48 @@ body.listening-mode .status-indicator {
   50% { opacity: 0.8; }
 }
 
-@keyframes traceLoadingWrite {
+@keyframes traceLoadingOrbit {
   0% {
-    stroke-dashoffset: 265;
     opacity: 0;
+    transform: translateX(-50%) rotate(-42deg) scale(0.88);
+    clip-path: inset(0 100% 0 0);
   }
-  22% {
-    opacity: 1;
+  20% {
+    opacity: 0.48;
   }
-  78% {
-    stroke-dashoffset: 42;
-    opacity: 1;
+  72% {
+    opacity: 0.68;
+    transform: translateX(-50%) rotate(0deg) scale(1);
+    clip-path: inset(0 0 0 0);
   }
   100% {
-    stroke-dashoffset: 42;
     opacity: 0.18;
+    transform: translateX(-50%) rotate(0deg) scale(1);
+    clip-path: inset(0 14% 0 0);
   }
 }
 
-@keyframes traceSealWrite {
+@keyframes traceSealOrbit {
   0% {
-    stroke-dashoffset: 265;
     opacity: 0;
-  }
-  18% {
-    opacity: 1;
-  }
-  100% {
-    stroke-dashoffset: 42;
-    opacity: 0.92;
-  }
-}
-
-@keyframes traceTailLift {
-  0%, 100% {
-    opacity: 0.92;
-    transform: translateY(0);
-  }
-  50% {
-    opacity: 1;
-    transform: translateY(-1px);
-  }
-}
-
-@keyframes traceTailRise {
-  0% {
-    opacity: 0.7;
-    transform: translateY(1px);
+    transform: translateX(-50%) rotate(-36deg) scale(0.9);
+    clip-path: inset(0 100% 0 0);
   }
   100% {
-    opacity: 1;
-    transform: translateY(0);
+    opacity: 0.72;
+    transform: translateX(-50%) rotate(0deg) scale(1);
+    clip-path: inset(0 12% 0 0);
   }
 }
 
-@keyframes traceEchoPulse {
+@keyframes traceEchoOrbit {
   0% {
     opacity: 0.42;
-    transform: rotate(-22deg) scale(0.92);
+    transform: translateX(-50%) scale(0.92);
   }
   100% {
     opacity: 0;
-    transform: rotate(-22deg) scale(1.18);
-  }
-}
-
-@keyframes traceEchoGlint {
-  0% {
-    opacity: 0.96;
-    filter: brightness(1);
-  }
-  50% {
-    opacity: 1;
-    filter: brightness(1.14);
-  }
-  100% {
-    opacity: 0.96;
-    filter: brightness(1);
+    transform: translateX(-50%) scale(1.16);
   }
 }
 

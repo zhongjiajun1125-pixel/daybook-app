@@ -1,16 +1,16 @@
 {
-  "name": "Trace - 自我結構顯影系統",
+  "name": "Trace",
   "short_name": "Trace",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1a1b1e",
   "theme_color": "#1a1b1e",
-  "description": "純本地的認知與自我結構顯影系統",
+  "description": "纯本地的记录空间",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Ccircle cx='256' cy='256' r='200' fill='%23171717'/%3E%3C/svg%3E",
+      "src": "./image.png",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/png"
     }
   ]
 }
