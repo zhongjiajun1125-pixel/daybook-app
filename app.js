@@ -180,7 +180,11 @@ const elements = {
   fontToggleBtn: document.getElementById("font-toggle-btn"),
   vaultToggleBtn: document.getElementById("vault-toggle-btn"),
   historyToggle: document.getElementById("history-toggle"),
+  traceLoading: document.getElementById("trace-loading"),
+  traceLoadingMark: document.getElementById("trace-loading-mark"),
+  traceLoadingLabel: document.getElementById("trace-loading-label"),
   unlockView: document.getElementById("unlock-view"),
+  unlockTraceMark: document.getElementById("unlock-trace-mark"),
   unlockBtn: document.getElementById("unlock-btn"),
   unlockTitle: document.getElementById("unlock-title"),
   unlockSubtitle: document.getElementById("unlock-subtitle"),
@@ -195,6 +199,7 @@ const elements = {
   pinSubmitBtn: document.getElementById("pin-submit-btn"),
   pinCancelBtn: document.getElementById("pin-cancel-btn"),
   onboardingView: document.getElementById("onboarding-view"),
+  onboardingTraceMark: document.getElementById("onboarding-trace-mark"),
   enterWritingBtn: document.getElementById("enter-writing-btn"),
   composeView: document.getElementById("compose-view"),
   systemEchoPanel: document.getElementById("system-echo-panel"),
@@ -205,6 +210,7 @@ const elements = {
   echoCardLine2: document.getElementById("echo-card-line-2"),
   echoCardLine3: document.getElementById("echo-card-line-3"),
   fontStyleLabel: document.getElementById("font-style-label"),
+  composeTraceMark: document.getElementById("compose-trace-mark"),
   rawMemoryInput: document.getElementById("raw-memory-input"),
   anchorBtns: document.querySelectorAll(".anchor-btn"),
   saveStatus: document.getElementById("save-status"),
@@ -909,6 +915,46 @@ function setStatusMessage(text = "", timeout = 0) {
   }
 }
 
+function clearTraceMarkState(node) {
+  if (!node) return;
+  node.classList.remove("is-loading", "is-sealing", "is-echo");
+  if (node._traceTimer) {
+    window.clearTimeout(node._traceTimer);
+    node._traceTimer = null;
+  }
+}
+
+function animateTraceMark(node, mode, duration = 1000) {
+  if (!node) return;
+  clearTraceMarkState(node);
+  void node.offsetWidth;
+  node.classList.add(mode);
+  if (duration > 0) {
+    node._traceTimer = window.setTimeout(() => {
+      node.classList.remove(mode);
+      node._traceTimer = null;
+    }, duration);
+  }
+}
+
+function setTraceLoading(active, label = "正在进入…") {
+  if (!elements.traceLoading) return;
+
+  if (elements.traceLoadingLabel) {
+    elements.traceLoadingLabel.textContent = label;
+  }
+
+  elements.traceLoading.classList.toggle("hidden", !active);
+  elements.traceLoading.classList.toggle("is-active", active);
+
+  if (active) {
+    animateTraceMark(elements.unlockTraceMark, "is-loading", 0);
+  } else {
+    clearTraceMarkState(elements.traceLoadingMark);
+    clearTraceMarkState(elements.unlockTraceMark);
+  }
+}
+
 function insertTextAtCursor(text) {
   const input = elements.rawMemoryInput;
   if (!input || !text) return;
@@ -1103,11 +1149,14 @@ function renderAccessView(status = "idle", customSubtitle = "") {
 
 async function completeUnlock() {
   renderAccessView("success");
+  setTraceLoading(true, "正在进入…");
   window.sessionStorage.setItem(SESSION_UNLOCK_KEY, "1");
-  window.setTimeout(() => {
-    showPinPanel(false);
-    bootSystem().then(() => checkPendingEchoOnBoot());
-  }, 280);
+  await new Promise((resolve) => window.setTimeout(resolve, 280));
+  showPinPanel(false);
+  await bootSystem();
+  checkPendingEchoOnBoot();
+  setTraceLoading(false);
+  animateTraceMark(elements.unlockTraceMark, "is-echo", 880);
 }
 
 async function handleUnlock() {
@@ -1117,11 +1166,13 @@ async function handleUnlock() {
   }
 
   renderAccessView("active");
+  setTraceLoading(true, "正在进入…");
 
   try {
     await completeUnlock();
   } catch (error) {
     console.error("Access boot failed:", error);
+    setTraceLoading(false);
     renderAccessView("failed");
     window.setTimeout(() => {
       renderAccessView("idle");
@@ -1137,6 +1188,7 @@ async function handlePinSubmit() {
   }
 
   renderAccessView("active");
+  setTraceLoading(true, "正在验证…");
 
   try {
     if (state.accessMode === "resetPin") {
@@ -1161,6 +1213,7 @@ async function handlePinSubmit() {
     await completeUnlock();
   } catch (error) {
     console.error("PIN Auth Failed:", error);
+    setTraceLoading(false);
     renderAccessView("failed", state.pinEnabled ? "PIN 不正确" : "PIN 设置失败");
     if (elements.pinInput) elements.pinInput.value = "";
     window.setTimeout(() => {
@@ -1447,6 +1500,7 @@ async function submitEntry() {
   elements.rawMemoryInput.classList.add("ink-dissolve");
   document.body.classList.remove("focus-mode");
   elements.saveStatus.textContent = "封存中…";
+  animateTraceMark(elements.composeTraceMark, "is-sealing", 1080);
   playTraceFeedback();
 
   await saveEntryRecord(entry);
@@ -1822,6 +1876,7 @@ function showEchoCard(payload) {
   elements.echoCardLine1.textContent = payload.l1 || "";
   elements.echoCardLine2.textContent = payload.l2 || "";
   elements.echoCardLine3.textContent = payload.l3 || "";
+  animateTraceMark(elements.composeTraceMark, "is-echo", 880);
   if ((payload.level || 0) >= 3) {
     elements.echoCard.style.borderColor = "rgba(255,255,255,0.12)";
   } else {
@@ -2444,6 +2499,10 @@ function showView(viewName) {
   elements.onboardingView.classList.toggle("hidden", viewName !== "onboarding");
   elements.composeView.classList.toggle("hidden", viewName !== "compose");
   elements.globalTools.classList.toggle("hidden", viewName === "onboarding" || viewName === "unlock");
+
+  if (viewName === "onboarding") {
+    animateTraceMark(elements.onboardingTraceMark, "is-sealing", 980);
+  }
 }
 function exportEntries() {
   const payload = JSON.stringify(state.entries, null, 2);

@@ -37,12 +37,33 @@
       <button id="history-toggle" class="ghost-btn" type="button">历史</button>
     </nav>
 
+    <div id="trace-loading" class="trace-loading hidden" aria-live="polite" aria-atomic="true">
+      <div id="trace-loading-mark" class="trace-mark-shell trace-mark-shell--loading">
+        <svg class="trace-mark" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="trace-ring-base" cx="60" cy="60" r="38"></circle>
+          <circle class="trace-ring-draw" cx="60" cy="60" r="38"></circle>
+          <circle class="trace-ring-pulse" cx="60" cy="60" r="38"></circle>
+          <path class="trace-tail trace-tail-top" d="M79 24c8 1 14 5 18 10"></path>
+          <path class="trace-tail trace-tail-mid" d="M74 26c11 2 20 7 25 15"></path>
+          <path class="trace-tail trace-tail-bottom" d="M84 82c6-3 10-9 11-16"></path>
+        </svg>
+      </div>
+      <span id="trace-loading-label" class="trace-loading-label">正在进入…</span>
+    </div>
+
     <main id="app-root" class="app-shell">
       
       <section id="unlock-view" class="view-section unlock-view hidden">
         <div class="unlock-shell">
-          <div class="unlock-orb">
-            <div class="unlock-ring"></div>
+          <div id="unlock-trace-mark" class="unlock-orb trace-mark-shell trace-mark-shell--unlock">
+            <svg class="trace-mark" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="trace-ring-base" cx="60" cy="60" r="38"></circle>
+              <circle class="trace-ring-draw" cx="60" cy="60" r="38"></circle>
+              <circle class="trace-ring-pulse" cx="60" cy="60" r="38"></circle>
+              <path class="trace-tail trace-tail-top" d="M79 24c8 1 14 5 18 10"></path>
+              <path class="trace-tail trace-tail-mid" d="M74 26c11 2 20 7 25 15"></path>
+              <path class="trace-tail trace-tail-bottom" d="M84 82c6-3 10-9 11-16"></path>
+            </svg>
           </div>
           <p id="unlock-title" class="unlock-title">解锁</p>
           <p id="unlock-subtitle" class="unlock-subtitle">输入 PIN 或继续</p>
@@ -80,6 +101,16 @@
 
       <section id="onboarding-view" class="view-section active">
         <div class="narrative-shell">
+          <div id="onboarding-trace-mark" class="trace-brand-mark trace-mark-shell trace-mark-shell--brand">
+            <svg class="trace-mark" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="trace-ring-base" cx="60" cy="60" r="38"></circle>
+              <circle class="trace-ring-draw" cx="60" cy="60" r="38"></circle>
+              <circle class="trace-ring-pulse" cx="60" cy="60" r="38"></circle>
+              <path class="trace-tail trace-tail-top" d="M79 24c8 1 14 5 18 10"></path>
+              <path class="trace-tail trace-tail-mid" d="M74 26c11 2 20 7 25 15"></path>
+              <path class="trace-tail trace-tail-bottom" d="M84 82c6-3 10-9 11-16"></path>
+            </svg>
+          </div>
           <p class="eyebrow-text">TRACE / YOUR WRITING SPACE</p>
           <p class="hero-text">你好。</p>
           <br><br>
@@ -118,7 +149,19 @@
 
           <article class="writing-card">
             <div class="paper-header">
-              <span class="paper-kicker">现在</span>
+              <div class="paper-presence">
+                <div id="compose-trace-mark" class="trace-mark-shell trace-mark-shell--compose">
+                  <svg class="trace-mark" viewBox="0 0 120 120" aria-hidden="true">
+                    <circle class="trace-ring-base" cx="60" cy="60" r="38"></circle>
+                    <circle class="trace-ring-draw" cx="60" cy="60" r="38"></circle>
+                    <circle class="trace-ring-pulse" cx="60" cy="60" r="38"></circle>
+                    <path class="trace-tail trace-tail-top" d="M79 24c8 1 14 5 18 10"></path>
+                    <path class="trace-tail trace-tail-mid" d="M74 26c11 2 20 7 25 15"></path>
+                    <path class="trace-tail trace-tail-bottom" d="M84 82c6-3 10-9 11-16"></path>
+                  </svg>
+                </div>
+                <span class="paper-kicker">现在</span>
+              </div>
               <span id="font-style-label" class="paper-meta">默认</span>
             </div>
             <textarea
@@ -189,6 +232,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260401-5"></script>
+    <script src="./app.js?v=20260401-6"></script>
   </body>
 </html>
