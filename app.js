@@ -425,40 +425,6 @@ function loadPredictionState() {
   }
 }
 
-let audioCtx = null;
-
-async function playTraceFeedback() {
-  try {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === "suspended") {
-      await audioCtx.resume();
-    }
-
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 880;
-    osc.type = "sine";
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    const now = audioCtx.currentTime;
-    osc.frequency.setValueAtTime(520, now);
-    osc.frequency.exponentialRampToValueAtTime(310, now + 0.18);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
-    osc.start(now);
-    osc.stop(now + 0.4);
-  } catch {
-    // stay silent if audio is unavailable
-  }
-}
-
 const AIEngine = {
   createPromptEnvelope(currentEntry, memoryContext) {
     return {
