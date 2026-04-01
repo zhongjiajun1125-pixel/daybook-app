@@ -107,11 +107,15 @@ const LocalPin = {
   },
 
   async hash(pin) {
-    const encoded = new TextEncoder().encode(pin);
-    const digest = await window.crypto.subtle.digest("SHA-256", encoded);
-    return Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
+    if (window.crypto && window.crypto.subtle) {
+      const encoded = new TextEncoder().encode(pin);
+      const digest = await window.crypto.subtle.digest("SHA-256", encoded);
+      return Array.from(new Uint8Array(digest))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    return window.btoa(window.encodeURIComponent(`trace_fallback_${pin}`));
   },
 
   async enroll(pin) {
@@ -551,6 +555,21 @@ const MemoryEngine = {
   },
 };
 
+function createTimeoutError(message) {
+  const error = new Error(message);
+  error.name = "TraceTimeoutError";
+  return error;
+}
+
+async function bootWithTimeout(timeoutMs = 1800) {
+  return Promise.race([
+    bootSystem(),
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(createTimeoutError("Trace boot timed out")), timeoutMs);
+    })
+  ]);
+}
+
 async function bootSystem() {
   try {
     await db.init();
@@ -676,7 +695,6 @@ function initVoiceRecognition() {
 
   recognition.onresult = (event) => {
     let finalTranscript = "";
-    let interimTranscript = "";
 
     for (let index = event.resultIndex; index < event.results.length; index += 1) {
       const transcript = event.results[index][0]?.transcript?.trim() || "";
@@ -684,8 +702,6 @@ function initVoiceRecognition() {
 
       if (event.results[index].isFinal) {
         finalTranscript += transcript;
-      } else {
-        interimTranscript += transcript;
       }
     }
 
@@ -799,16 +815,9 @@ async function handleUnlock() {
   syncUnlockLabel("active");
 
   try {
-    const hasCredential = Boolean(window.localStorage.getItem(BIO_CRED_KEY));
-
-    if (state.bioEnrolled && !hasCredential) {
+    if (state.bioEnrolled && !window.localStorage.getItem(BIO_CRED_KEY)) {
       state.bioEnrolled = false;
       window.localStorage.removeItem(BIO_KEY);
-    }
-
-    if (!state.bioEnrolled && !state.pinEnabled) {
-      await bootSystem();
-      return;
     }
 
     if (!state.bioEnrolled) {
@@ -816,15 +825,8 @@ async function handleUnlock() {
       return;
     }
 
-    if (!LocalBio.isSupported() || !hasCredential) {
-      if (state.pinEnabled) {
-        await fallbackToPin();
-        return;
-      }
-
-      state.bioEnrolled = false;
-      window.localStorage.removeItem(BIO_KEY);
-      await bootSystem();
+    if (!LocalBio.isSupported()) {
+      await fallbackToPin();
       return;
     }
 
@@ -832,14 +834,7 @@ async function handleUnlock() {
     await completeUnlock();
   } catch (error) {
     console.error("Bio Auth Failed:", error);
-    if (state.pinEnabled) {
-      await fallbackToPin();
-      return;
-    }
-
-    state.bioEnrolled = false;
-    window.localStorage.removeItem(BIO_KEY);
-    await bootSystem();
+    await fallbackToPin();
   }
 }
 
@@ -853,21 +848,26 @@ async function handlePinSubmit() {
   syncUnlockLabel("active");
 
   try {
-    if (!state.pinEnabled) {
+    const isNewEnrollment = !state.pinEnabled;
+
+    if (isNewEnrollment) {
       await LocalPin.enroll(pin);
     } else {
       await LocalPin.verify(pin);
     }
 
-    if (!state.bioEnrolled) {
+    if (isNewEnrollment && !state.bioEnrolled && LocalBio.isSupported()) {
       if (elements.unlockSubtitle) {
-        elements.unlockSubtitle.textContent = "PIN 已保存，继续录入面容";
+        elements.unlockSubtitle.textContent = "PIN 已保存，请录入面容";
       }
-      showPinPanel(false);
-      window.setTimeout(() => {
-        handleUnlock();
-      }, 200);
-      return;
+
+      try {
+        await LocalBio.enroll();
+        state.bioEnrolled = true;
+        window.localStorage.setItem(BIO_KEY, "1");
+      } catch (bioError) {
+        console.warn("面容录入跳过或失败，不影响解锁", bioError);
+      }
     }
 
     await completeUnlock();
@@ -2043,7 +2043,6 @@ function showView(viewName) {
   elements.composeView.classList.toggle("hidden", viewName !== "compose");
   elements.globalTools.classList.toggle("hidden", viewName === "onboarding" || viewName === "unlock");
 }
-
 function exportEntries() {
   const payload = JSON.stringify(state.entries, null, 2);
   const blob = new Blob([payload], { type: "application/json" });
@@ -2508,6 +2507,6 @@ window.addEventListener("load", async () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    navigator.serviceWorker.register("./sw.js?v=20260401-1").catch(() => {});
   });
 }
