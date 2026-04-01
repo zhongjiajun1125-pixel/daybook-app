@@ -2495,18 +2495,19 @@ window.addEventListener("load", async () => {
   loadSystemState();
   TracePrediction.init();
   cleanupEchoChain();
+  showView("onboarding");
 
-  if (state.bioEnrolled || state.pinEnabled) {
-    showView("unlock");
-    return;
+  try {
+    await bootSystem();
+    checkPendingEchoOnBoot();
+  } catch (error) {
+    console.error("Trace startup fallback:", error);
+    showView("onboarding");
   }
-
-  await bootSystem();
-  checkPendingEchoOnBoot();
 });
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js?v=20260401-1").catch(() => {});
+    navigator.serviceWorker.register("./sw.js?v=20260401-2").catch(() => {});
   });
 }

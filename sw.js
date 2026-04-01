@@ -1,4 +1,4 @@
-const CACHE_NAME = "trace-cognition-v2";
+const CACHE_NAME = "trace-cognition-v3";
 const ASSETS = [
   "./",
   "./index.html",
