@@ -45,6 +45,12 @@ const elements = {
   enterWritingBtn: document.getElementById("enter-writing-btn"),
   composeView: document.getElementById("compose-view"),
   systemEchoPanel: document.getElementById("system-echo-panel"),
+  echoEventLayer: document.getElementById("echo-event-layer"),
+  echoEventCard: document.getElementById("echo-event-card"),
+  echoEventClose: document.getElementById("echo-event-close"),
+  echoObservation: document.getElementById("echo-observation"),
+  echoPattern: document.getElementById("echo-pattern"),
+  echoOpenLoop: document.getElementById("echo-open-loop"),
   fontStyleLabel: document.getElementById("font-style-label"),
   rawMemoryInput: document.getElementById("raw-memory-input"),
   anchorBtns: document.querySelectorAll(".anchor-btn"),
@@ -74,6 +80,8 @@ let implicitSession = {
   backspaceCount: 0,
   hasTyped: false,
 };
+
+let echoEventTimer = null;
 
 const health = {
   dbReady: false,
@@ -191,6 +199,38 @@ const db = {
     });
   },
 };
+
+let audioCtx = null;
+
+function playTraceFeedback() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 880;
+    osc.type = "sine";
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(310, now + 0.18);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch {
+    // stay silent if audio is unavailable
+  }
+}
 
 const AIEngine = {
   createPromptEnvelope(currentEntry, memoryContext) {
@@ -424,6 +464,10 @@ function bindEvents() {
     });
   }
 
+  if (elements.echoEventClose) {
+    elements.echoEventClose.addEventListener("click", hideEchoEvent);
+  }
+
   if (elements.exportBtn) {
     elements.exportBtn.addEventListener("click", exportEntries);
   }
@@ -474,17 +518,37 @@ async function submitEntry() {
   };
 
   entry.analysis = AIEngine.analyze(entry, [entry, ...state.entries.filter((item) => item.id !== entry.id)]);
+  const shouldTriggerEvent = shouldTriggerEchoEvent(entry);
+
+  elements.rawMemoryInput.blur();
+  elements.rawMemoryInput.classList.add("ink-dissolve");
+  document.body.classList.remove("focus-mode");
+  elements.saveStatus.textContent = "封存中…";
+  playTraceFeedback();
 
   await db.put(entry);
   upsertStateEntry(entry);
   RetentionSniper.updateActivity();
 
-  elements.saveStatus.textContent = "已保存";
   window.setTimeout(() => {
-    elements.saveStatus.textContent = "";
-  }, 1800);
+    elements.saveStatus.textContent = "已封存";
+  }, 280);
 
-  resetComposeState();
+  window.setTimeout(() => {
+    resetComposeState();
+    elements.saveStatus.textContent = "";
+  }, 820);
+
+  if (shouldTriggerEvent) {
+    window.setTimeout(() => {
+      showEchoEvent(entry);
+    }, 460);
+  } else {
+    window.setTimeout(() => {
+      hideEchoEvent(true);
+    }, 320);
+  }
+
   renderEchoBlock(entry.analysis.response);
   runHealthChecks();
 }
@@ -501,6 +565,7 @@ function upsertStateEntry(entry) {
 
 function resetComposeState() {
   elements.rawMemoryInput.value = "";
+  elements.rawMemoryInput.classList.remove("ink-dissolve");
   state.draft = "";
   state.editingId = null;
   state.activeAnchor = null;
@@ -548,6 +613,112 @@ function renderEchoBlock(response) {
     if (index > 0) line.style.marginTop = "8px";
     panel.appendChild(line);
   });
+}
+
+function shouldTriggerEchoEvent(entry) {
+  const interpretation = entry.analysis?.interpretation;
+  if (!interpretation?.should_echo) return false;
+
+  return (
+    interpretation.confidence >= 0.48 ||
+    Boolean(interpretation.core_tension) ||
+    Boolean(interpretation.pattern_link) ||
+    entry.context.friction >= 4 ||
+    entry.context.durationSec >= 35
+  );
+}
+
+function buildEchoEvent(entry) {
+  const interpretation = entry.analysis?.interpretation || {};
+  const response = entry.analysis?.response || {};
+  const observation = buildEventObservation(entry, interpretation);
+  const pattern = buildEventPattern(entry, interpretation);
+  const openLoop = buildEventOpenLoop(response, interpretation);
+
+  return {
+    observation,
+    pattern,
+    openLoop,
+  };
+}
+
+function buildEventObservation(entry, interpretation) {
+  if (entry.metadata?.anchor === "游离") {
+    return "你刚刚留下的是一段还在散开的想法。";
+  }
+  if (entry.metadata?.anchor === "焦滞") {
+    return "你现在更像是在围着一个卡住的点慢慢靠近。";
+  }
+  if (entry.metadata?.anchor === "沉缩") {
+    return "你刚刚留下的是一段往内收的记录。";
+  }
+  if (interpretation.topic_entities?.[0]) {
+    return `你现在更像是在试着碰一碰「${interpretation.topic_entities[0]}」这件事。`;
+  }
+  return "你刚刚留下的是一段还没有完全说完的话。";
+}
+
+function buildEventPattern(entry, interpretation) {
+  if (entry.context.friction >= 6) {
+    return `这次记录里出现了明显的反复修改，停顿也比平时更重。`;
+  }
+  if (entry.context.durationSec >= 45) {
+    return "这次的停顿发生在你快要把它说清楚的时候。";
+  }
+  if (interpretation.pattern_link) {
+    return interpretation.pattern_link.replace("。", "，");
+  }
+  if (interpretation.core_tension) {
+    return `这段记录中出现了${interpretation.core_tension.replace("。", "")}。`;
+  }
+  return "这段记录里有一部分已经露出来了。";
+}
+
+function buildEventOpenLoop(response, interpretation) {
+  if (response.question) {
+    return `但${response.question.replace(/[？?]$/, "")}。`;
+  }
+  if (interpretation.pattern_link) {
+    return "但有些地方还没有真正展开。";
+  }
+  return "但它还停在一个没有继续展开的位置。";
+}
+
+function showEchoEvent(entry) {
+  const event = buildEchoEvent(entry);
+  elements.echoObservation.textContent = event.observation;
+  elements.echoPattern.textContent = event.pattern;
+  elements.echoOpenLoop.textContent = event.openLoop;
+
+  elements.echoEventLayer.classList.remove("hidden", "leaving");
+  void elements.echoEventCard.offsetWidth;
+  elements.echoEventLayer.classList.add("active");
+
+  if (echoEventTimer) window.clearTimeout(echoEventTimer);
+  echoEventTimer = window.setTimeout(() => {
+    hideEchoEvent();
+  }, 4800);
+}
+
+function hideEchoEvent(immediate = false) {
+  if (echoEventTimer) {
+    window.clearTimeout(echoEventTimer);
+    echoEventTimer = null;
+  }
+
+  if (immediate) {
+    elements.echoEventLayer.classList.add("hidden");
+    elements.echoEventLayer.classList.remove("active", "leaving");
+    return;
+  }
+
+  if (elements.echoEventLayer.classList.contains("hidden")) return;
+  elements.echoEventLayer.classList.remove("active");
+  elements.echoEventLayer.classList.add("leaving");
+  window.setTimeout(() => {
+    elements.echoEventLayer.classList.add("hidden");
+    elements.echoEventLayer.classList.remove("leaving");
+  }, 420);
 }
 
 function cycleFontStyle() {
@@ -623,14 +794,14 @@ function renderHistory() {
     const textNode = node.querySelector(".history-raw-text");
     const echoNode = node.querySelector(".history-echo-text");
     const secondaryNode = node.querySelector(".history-secondary");
-    textNode.textContent = entry.content || "[空白记录]";
+    textNode.textContent = summarizeHistoryContent(entry.content || "[空白记录]");
     const responseParts = [
       entry.analysis?.response?.echo,
       entry.analysis?.response?.question,
       entry.analysis?.response?.pattern_hint,
     ].filter(Boolean);
     if (echoNode && secondaryNode && responseParts.length) {
-      echoNode.textContent = responseParts.join("\n");
+      echoNode.textContent = summarizeHistoryEcho(responseParts);
       secondaryNode.classList.remove("hidden");
     }
 
@@ -1001,6 +1172,19 @@ function findMostFrequent(values) {
 
 function containsAny(text, lexicon) {
   return lexicon.some((item) => text.includes(item));
+}
+
+function summarizeHistoryContent(text) {
+  if (!text || text === "[空白记录]") return text;
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 60) return normalized;
+  return `${normalized.slice(0, 60)}…`;
+}
+
+function summarizeHistoryEcho(parts) {
+  const firstLine = parts[0] || "";
+  if (firstLine.length <= 42) return firstLine;
+  return `${firstLine.slice(0, 42)}…`;
 }
 
 window.addEventListener("load", init);

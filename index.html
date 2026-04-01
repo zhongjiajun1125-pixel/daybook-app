@@ -33,13 +33,23 @@
       <section id="onboarding-view" class="view-section hidden">
         <div class="narrative-shell">
           <p class="eyebrow-text">TRACE / YOUR WRITING SPACE</p>
-          <p class="hero-text">给自己留一个安静一点的地方。</p>
+          <p class="hero-text">你好。</p>
           <br><br>
-          <p>不用整理，不用想太多。</p>
-          <p>想到什么，就先写下来。</p>
-          <p>这里不会打扰你，只会帮你记住。</p>
-          <br><br>
-          <p>准备好了就开始。</p>
+          <p>如果今天有一些话，</p>
+          <p>你暂时还不知道该怎么说，</p>
+          <p>可以先把它留在这里。</p>
+          <br>
+          <p>一句也可以，</p>
+          <p>半句也可以。</p>
+          <br>
+          <p>有些东西，不是在想明白之后</p>
+          <p>才写下来的。</p>
+          <p>它们往往是在写下来的过程里，</p>
+          <p>才一点点变得清楚。</p>
+          <br>
+          <p>所以这不只是记录。</p>
+          <p>它也会帮你看见，</p>
+          <p>那些反复出现、却一直没有说透的部分。</p>
         </div>
         <div class="action-shell">
           <button id="enter-writing-btn" class="primary-action-btn" type="button">→ 开始写</button>
@@ -49,6 +59,14 @@
       <section id="compose-view" class="view-section hidden">
         <div class="compose-shell">
           <aside id="system-echo-panel" class="echo-panel empty" aria-live="polite"></aside>
+          <div id="echo-event-layer" class="echo-event-layer hidden" aria-live="polite">
+            <article id="echo-event-card" class="echo-event-card" role="status">
+              <button id="echo-event-close" class="echo-event-close" type="button" aria-label="关闭">×</button>
+              <p id="echo-observation" class="echo-event-line"></p>
+              <p id="echo-pattern" class="echo-event-line"></p>
+              <p id="echo-open-loop" class="echo-event-line"></p>
+            </article>
+          </div>
 
           <article class="writing-card">
             <div class="paper-header">
