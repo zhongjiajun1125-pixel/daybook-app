@@ -15,7 +15,7 @@
     <link rel="icon" href="./trace-logo-black.png">
     <link rel="apple-touch-icon" href="./trace-logo-black.png">
     
-    <link rel="stylesheet" href="./styles.css?v=20260402-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260402-6" />
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -171,6 +171,30 @@
           <h2>回看</h2>
           <button id="close-history-btn" class="close-btn" type="button">继续写</button>
         </div>
+        <div id="review-tools" class="review-tools" aria-label="阅读偏好">
+          <button
+            id="review-tools-entry"
+            class="review-tools-entry"
+            type="button"
+            aria-expanded="false"
+            aria-controls="review-tools-body"
+          >
+            换一下
+          </button>
+          <div id="review-tools-body" class="review-tools-body" aria-hidden="true">
+            <div class="review-tool-row">
+              <span class="review-tool-label">字</span>
+              <button id="reading-font-system" class="review-tool-option" data-reading-font="system" type="button">平一点</button>
+              <button id="reading-font-serif" class="review-tool-option" data-reading-font="serif" type="button">读着</button>
+            </div>
+            <div class="review-tool-row">
+              <span class="review-tool-label">声</span>
+              <button id="ambient-sound-off" class="review-tool-option" data-ambient-sound="off" type="button">安静</button>
+              <button id="ambient-sound-light" class="review-tool-option" data-ambient-sound="light" type="button">轻一点</button>
+              <button id="ambient-sound-deep" class="review-tool-option" data-ambient-sound="deep" type="button">深一点</button>
+            </div>
+          </div>
+        </div>
         
         <div id="history-pattern-layer" class="history-pattern-layer empty">
           <div id="insight-summary" class="history-narrative"></div>
@@ -199,6 +223,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260402-4"></script>
+    <script src="./app.js?v=20260402-6"></script>
   </body>
 </html>

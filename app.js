@@ -8,6 +8,13 @@ const STORE_NAME = "entries";
 const SETTINGS_STORE = "settings";
 const DRAFT_KEY = "trace-draft-v1";
 const LAST_ACTIVE_KEY = "trace-last-active";
+const READING_FONT_KEY = "trace-reading-font";
+const AMBIENT_SOUND_KEY = "trace-ambient-sound";
+const AMBIENT_SOUND_LEVELS = Object.freeze({
+  off: "off",
+  light: "light",
+  deep: "deep",
+});
 const PROFILE_NAME_KEY = "trace-profile-name";
 const BIO_KEY = "trace-bio-enrolled";
 const BIO_CRED_KEY = "trace-bio-cred-id";
@@ -589,6 +596,11 @@ const elements = {
   historyList: document.getElementById("history-list"),
   historyEntryTemplate: document.getElementById("history-entry-template"),
   closeHistoryBtn: document.getElementById("close-history-btn"),
+  reviewTools: document.getElementById("review-tools"),
+  reviewToolsEntry: document.getElementById("review-tools-entry"),
+  reviewToolsBody: document.getElementById("review-tools-body"),
+  readingFontButtons: document.querySelectorAll("[data-reading-font]"),
+  ambientSoundButtons: document.querySelectorAll("[data-ambient-sound]"),
 };
 
 let state = {
@@ -610,6 +622,9 @@ let state = {
   onboardingTransitioning: false,
   controlHubOpen: false,
   anchorPickerOpen: false,
+  reviewToolsOpen: false,
+  readingFont: window.localStorage.getItem(READING_FONT_KEY) === "serif" ? "serif" : "system",
+  ambientSoundLevel: resolveAmbientSoundLevel(window.localStorage.getItem(AMBIENT_SOUND_KEY)),
 };
 
 let implicitSession = {
@@ -623,6 +638,11 @@ let insightResizeTimer = null;
 let graphAnimationFrame = null;
 let recognition = null;
 let sessionKey = null;
+let ambientEngine = null;
+let ambientPresenceTimer = null;
+let ambientDriftTimer = null;
+let ambientOccasionalTimer = null;
+let ambientLastActivityAt = Date.now();
 
 const predictionState = {
   lastText: null,
@@ -2981,12 +3001,45 @@ function syncControlHub() {
   });
 }
 
+function syncReviewTools() {
+  if (!elements.reviewTools || !elements.reviewToolsEntry || !elements.reviewToolsBody) return;
+
+  elements.reviewTools.classList.toggle("is-open", state.reviewToolsOpen);
+  elements.reviewToolsEntry.setAttribute("aria-expanded", String(state.reviewToolsOpen));
+  elements.reviewToolsBody.setAttribute("aria-hidden", String(!state.reviewToolsOpen));
+
+  document.body.dataset.readingFont = state.readingFont;
+
+  elements.readingFontButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.readingFont === state.readingFont);
+  });
+
+  elements.ambientSoundButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.ambientSound === state.ambientSoundLevel);
+  });
+}
+
+function setReviewToolsOpen(open) {
+  state.reviewToolsOpen = Boolean(open);
+  noteAmbientActivity();
+  syncReviewTools();
+}
+
+function setReadingFont(font) {
+  state.readingFont = font === "serif" ? "serif" : "system";
+  window.localStorage.setItem(READING_FONT_KEY, state.readingFont);
+  noteAmbientActivity();
+  syncReviewTools();
+}
+
 function setControlHubOpen(open) {
   state.controlHubOpen = Boolean(open);
   if (!state.controlHubOpen) {
     state.anchorPickerOpen = false;
   }
+  noteAmbientActivity();
   syncControlHub();
+  syncAmbientPresence();
 }
 
 function setAnchorPickerOpen(open) {
@@ -2994,7 +3047,9 @@ function setAnchorPickerOpen(open) {
   if (state.anchorPickerOpen) {
     state.controlHubOpen = true;
   }
+  noteAmbientActivity();
   syncControlHub();
+  syncAmbientPresence();
 }
 
 function toggleAnchor(anchor) {
@@ -3016,9 +3071,11 @@ function clearCurrentDraft() {
   setAnchorPickerOpen(false);
   setControlHubOpen(false);
   elements.rawMemoryInput.focus();
+  noteAmbientActivity();
 }
 
-function openHistoryOverlay() {
+function openHistory() {
+  if (!elements.historyPanel || !elements.historyList) return;
   state.historyOpen = true;
   if (closeHistory._timer) {
     window.clearTimeout(closeHistory._timer);
@@ -3029,9 +3086,421 @@ function openHistoryOverlay() {
   elements.historyPanel.setAttribute("aria-hidden", "false");
   hideEchoCard(true);
   document.body.classList.remove("focus-mode");
+  setReviewToolsOpen(false);
   setAnchorPickerOpen(false);
   setControlHubOpen(false);
   renderHistory();
+  noteAmbientActivity();
+  syncAmbientPresence();
+}
+
+function resolveAmbientSoundLevel(value) {
+  if (
+    value === AMBIENT_SOUND_LEVELS.deep
+    || value === "2"
+    || value === "strong"
+  ) {
+    return AMBIENT_SOUND_LEVELS.deep;
+  }
+
+  if (
+    value === AMBIENT_SOUND_LEVELS.light
+    || value === "1"
+    || value === "on"
+    || value === "true"
+  ) {
+    return AMBIENT_SOUND_LEVELS.light;
+  }
+
+  return AMBIENT_SOUND_LEVELS.off;
+}
+
+function persistAmbientSoundLevel(level) {
+  window.localStorage.setItem(AMBIENT_SOUND_KEY, resolveAmbientSoundLevel(level));
+}
+
+function noteAmbientActivity() {
+  ambientLastActivityAt = Date.now();
+  syncAmbientPresence();
+}
+
+function randomBetween(min, max) {
+  return min + (Math.random() * (max - min));
+}
+
+function createAmbientBuffer(context, seconds = 18, { tint = "air" } = {}) {
+  const frameCount = Math.max(1, Math.floor(context.sampleRate * seconds));
+  const buffer = context.createBuffer(1, frameCount, context.sampleRate);
+  const channel = buffer.getChannelData(0);
+  let brown = 0;
+  let airy = 0;
+
+  for (let index = 0; index < frameCount; index += 1) {
+    const white = (Math.random() * 2) - 1;
+    brown = (brown + (0.018 * white)) / 1.018;
+    airy = (airy + (0.004 * white)) / 1.004;
+
+    if (tint === "air") {
+      channel[index] = ((brown * 0.7) + (airy * 0.3)) * 0.58;
+      continue;
+    }
+
+    if (tint === "distance") {
+      channel[index] = ((brown * 0.88) + (white * 0.12)) * 0.46;
+      continue;
+    }
+
+    channel[index] = ((brown * 0.54) + (white * 0.46)) * 0.34;
+  }
+
+  return buffer;
+}
+
+function createAmbientLayer(context, {
+  buffer,
+  type,
+  frequency,
+  q = 0.4,
+  gain = 0.2,
+}) {
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+
+  const filter = context.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.value = frequency;
+  filter.Q.value = q;
+
+  const gainNode = context.createGain();
+  gainNode.gain.value = gain;
+
+  source.connect(filter);
+  filter.connect(gainNode);
+
+  return { source, filter, gain: gainNode };
+}
+
+function clearAmbientTimers() {
+  if (ambientPresenceTimer) {
+    window.clearInterval(ambientPresenceTimer);
+    ambientPresenceTimer = null;
+  }
+
+  if (ambientDriftTimer) {
+    window.clearTimeout(ambientDriftTimer);
+    ambientDriftTimer = null;
+  }
+
+  if (ambientOccasionalTimer) {
+    window.clearTimeout(ambientOccasionalTimer);
+    ambientOccasionalTimer = null;
+  }
+}
+
+function getAmbientPresenceProfile() {
+  const level = state.ambientSoundLevel;
+  const composeHidden = elements.composeView?.classList.contains("hidden");
+
+  if (level === AMBIENT_SOUND_LEVELS.off || document.hidden || (composeHidden && !state.historyOpen)) {
+    return {
+      master: 0.0001,
+      baseGain: 0.18,
+      envGain: 0.12,
+      baseFrequency: 1800,
+      envFrequency: 520,
+      occasionalPeak: 0.12,
+    };
+  }
+
+  let intensity = level === AMBIENT_SOUND_LEVELS.deep ? 1.5 : 1;
+
+  if (state.controlHubOpen || state.anchorPickerOpen) intensity *= 1.08;
+  if (state.historyOpen) intensity *= 1.18;
+  if (voiceState.listening) intensity *= 0.74;
+
+  const idleMs = Date.now() - ambientLastActivityAt;
+  if (idleMs > 16000) intensity *= 1.1;
+
+  if (document.body.classList.contains("focus-mode") && !state.historyOpen) {
+    intensity *= 0.94;
+  }
+
+  return {
+    master: (level === AMBIENT_SOUND_LEVELS.deep ? 0.0038 : 0.0026) * intensity,
+    baseGain: state.historyOpen ? 0.54 : 0.46,
+    envGain: state.historyOpen ? 0.42 : 0.3,
+    baseFrequency: state.historyOpen ? 1520 : 1960,
+    envFrequency: state.historyOpen
+      ? 410
+      : ((state.controlHubOpen || state.anchorPickerOpen) ? 560 : 710),
+    occasionalPeak: (level === AMBIENT_SOUND_LEVELS.deep ? 0.24 : 0.16) * (state.historyOpen ? 1.12 : 1),
+  };
+}
+
+function scheduleAmbientPresenceLoop() {
+  if (ambientPresenceTimer) return;
+  ambientPresenceTimer = window.setInterval(() => {
+    syncAmbientPresence();
+  }, 4000);
+}
+
+function scheduleAmbientDrift() {
+  if (!ambientEngine || !audioCtx || state.ambientSoundLevel === AMBIENT_SOUND_LEVELS.off) return;
+
+  if (ambientDriftTimer) {
+    window.clearTimeout(ambientDriftTimer);
+  }
+
+  ambientDriftTimer = window.setTimeout(() => {
+    if (!ambientEngine || !audioCtx) return;
+
+    const profile = getAmbientPresenceProfile();
+    const now = audioCtx.currentTime;
+    const driftSeconds = randomBetween(4.4, 8.6);
+    const targetGain = state.historyOpen
+      ? randomBetween(0.34, 0.5)
+      : randomBetween(0.22, 0.38);
+    const targetFrequency = randomBetween(profile.envFrequency * 0.78, profile.envFrequency * 1.24);
+
+    ambientEngine.envLayer.gain.gain.cancelScheduledValues(now);
+    ambientEngine.envLayer.gain.gain.setValueAtTime(
+      Math.max(ambientEngine.envLayer.gain.gain.value, 0.0001),
+      now,
+    );
+    ambientEngine.envLayer.gain.gain.linearRampToValueAtTime(targetGain, now + driftSeconds);
+
+    ambientEngine.envLayer.filter.frequency.cancelScheduledValues(now);
+    ambientEngine.envLayer.filter.frequency.setValueAtTime(
+      Math.max(ambientEngine.envLayer.filter.frequency.value, 120),
+      now,
+    );
+    ambientEngine.envLayer.filter.frequency.linearRampToValueAtTime(targetFrequency, now + (driftSeconds * 1.2));
+
+    scheduleAmbientDrift();
+  }, randomBetween(5200, 11000));
+}
+
+function playAmbientOccasional() {
+  if (!ambientEngine || !audioCtx || state.ambientSoundLevel === AMBIENT_SOUND_LEVELS.off || document.hidden) return;
+
+  const profile = getAmbientPresenceProfile();
+  if (profile.master <= 0.00011) return;
+
+  const source = audioCtx.createBufferSource();
+  source.buffer = ambientEngine.occasionalBuffer;
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = Math.random() > 0.5 ? "bandpass" : "lowpass";
+  filter.frequency.value = randomBetween(state.historyOpen ? 280 : 360, state.historyOpen ? 760 : 980);
+  filter.Q.value = randomBetween(0.18, 0.54);
+
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.0001;
+
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(ambientEngine.master);
+
+  const now = audioCtx.currentTime;
+  const rise = randomBetween(1.4, 2.6);
+  const fall = randomBetween(5.2, 8.4);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(profile.occasionalPeak, now + rise);
+  gain.gain.linearRampToValueAtTime(0.0001, now + fall);
+
+  source.start(now);
+  source.stop(now + fall + 0.3);
+  source.onended = () => {
+    try {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    } catch {
+      // Keep silent.
+    }
+  };
+}
+
+function scheduleAmbientOccasional() {
+  if (!ambientEngine || state.ambientSoundLevel === AMBIENT_SOUND_LEVELS.off) return;
+
+  if (ambientOccasionalTimer) {
+    window.clearTimeout(ambientOccasionalTimer);
+  }
+
+  ambientOccasionalTimer = window.setTimeout(() => {
+    playAmbientOccasional();
+    scheduleAmbientOccasional();
+  }, randomBetween(18000, 42000));
+}
+
+function syncAmbientPresence({ immediate = false } = {}) {
+  if (!ambientEngine || !audioCtx) return;
+
+  const profile = getAmbientPresenceProfile();
+  const now = audioCtx.currentTime;
+  const settleAt = now + (immediate ? 0.18 : 1.4);
+
+  ambientEngine.master.gain.cancelScheduledValues(now);
+  ambientEngine.master.gain.setValueAtTime(Math.max(ambientEngine.master.gain.value, 0.0001), now);
+  ambientEngine.master.gain.linearRampToValueAtTime(Math.max(profile.master, 0.0001), settleAt);
+
+  ambientEngine.baseLayer.gain.gain.cancelScheduledValues(now);
+  ambientEngine.baseLayer.gain.gain.setValueAtTime(Math.max(ambientEngine.baseLayer.gain.gain.value, 0.0001), now);
+  ambientEngine.baseLayer.gain.gain.linearRampToValueAtTime(profile.baseGain, settleAt);
+
+  ambientEngine.baseLayer.filter.frequency.cancelScheduledValues(now);
+  ambientEngine.baseLayer.filter.frequency.setValueAtTime(
+    Math.max(ambientEngine.baseLayer.filter.frequency.value, 120),
+    now,
+  );
+  ambientEngine.baseLayer.filter.frequency.linearRampToValueAtTime(profile.baseFrequency, settleAt);
+
+  ambientEngine.envLayer.gain.gain.cancelScheduledValues(now);
+  ambientEngine.envLayer.gain.gain.setValueAtTime(Math.max(ambientEngine.envLayer.gain.gain.value, 0.0001), now);
+  ambientEngine.envLayer.gain.gain.linearRampToValueAtTime(profile.envGain, settleAt);
+
+  ambientEngine.envLayer.filter.frequency.cancelScheduledValues(now);
+  ambientEngine.envLayer.filter.frequency.setValueAtTime(
+    Math.max(ambientEngine.envLayer.filter.frequency.value, 120),
+    now,
+  );
+  ambientEngine.envLayer.filter.frequency.linearRampToValueAtTime(profile.envFrequency, settleAt);
+}
+
+async function startAmbientSound() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
+
+    if (!ambientEngine) {
+      const master = audioCtx.createGain();
+      master.gain.value = 0.0001;
+      master.connect(audioCtx.destination);
+
+      const baseLayer = createAmbientLayer(audioCtx, {
+        buffer: createAmbientBuffer(audioCtx, 17, { tint: "air" }),
+        type: "lowpass",
+        frequency: 1960,
+        q: 0.22,
+        gain: 0.42,
+      });
+
+      const envLayer = createAmbientLayer(audioCtx, {
+        buffer: createAmbientBuffer(audioCtx, 23, { tint: "distance" }),
+        type: "bandpass",
+        frequency: 710,
+        q: 0.36,
+        gain: 0.28,
+      });
+
+      baseLayer.gain.connect(master);
+      envLayer.gain.connect(master);
+
+      const now = audioCtx.currentTime;
+      baseLayer.source.start(now);
+      envLayer.source.start(now);
+
+      ambientEngine = {
+        master,
+        baseLayer,
+        envLayer,
+        occasionalBuffer: createAmbientBuffer(audioCtx, 8, { tint: "variation" }),
+      };
+
+      scheduleAmbientPresenceLoop();
+      scheduleAmbientDrift();
+      scheduleAmbientOccasional();
+    }
+
+    syncAmbientPresence({ immediate: true });
+  } catch {
+    state.ambientSoundLevel = AMBIENT_SOUND_LEVELS.off;
+    persistAmbientSoundLevel(AMBIENT_SOUND_LEVELS.off);
+    syncReviewTools();
+  }
+}
+
+function stopAmbientSound() {
+  clearAmbientTimers();
+
+  if (!ambientEngine || !audioCtx) return;
+
+  const engine = ambientEngine;
+  ambientEngine = null;
+
+  try {
+    const now = audioCtx.currentTime;
+    engine.master.gain.cancelScheduledValues(now);
+    engine.master.gain.setValueAtTime(Math.max(engine.master.gain.value, 0.0001), now);
+    engine.master.gain.linearRampToValueAtTime(0.0001, now + 0.42);
+  } catch {
+    // Keep silent.
+  }
+
+  window.setTimeout(() => {
+    try {
+      engine.baseLayer.source.stop();
+      engine.envLayer.source.stop();
+    } catch {
+      // Keep silent.
+    }
+
+    [engine.baseLayer, engine.envLayer].forEach((layer) => {
+      try {
+        layer.source.disconnect();
+      } catch {
+        // Keep silent.
+      }
+      try {
+        layer.filter.disconnect();
+      } catch {
+        // Keep silent.
+      }
+      try {
+        layer.gain.disconnect();
+      } catch {
+        // Keep silent.
+      }
+    });
+
+    try {
+      engine.master.disconnect();
+    } catch {
+      // Keep silent.
+    }
+  }, 460);
+}
+
+function setAmbientSoundLevel(level, { interactive = false } = {}) {
+  state.ambientSoundLevel = resolveAmbientSoundLevel(level);
+  persistAmbientSoundLevel(state.ambientSoundLevel);
+  syncReviewTools();
+
+  if (state.ambientSoundLevel === AMBIENT_SOUND_LEVELS.off) {
+    stopAmbientSound();
+    return;
+  }
+
+  noteAmbientActivity();
+
+  if (interactive) {
+    startAmbientSound();
+    return;
+  }
+
+  syncAmbientPresence();
+}
+
+function primeAmbientSound() {
+  if (state.ambientSoundLevel === AMBIENT_SOUND_LEVELS.off) return;
+  startAmbientSound();
 }
 
 function getEntryLocalDayKey(entry) {
@@ -3215,6 +3684,7 @@ function stopVoiceCapture({ silent = false } = {}) {
     voiceState.listening = false;
     document.body.classList.remove("listening-mode");
     syncControlHub();
+    syncAmbientPresence({ immediate: true });
     return;
   }
 
@@ -3225,6 +3695,7 @@ function stopVoiceCapture({ silent = false } = {}) {
     setStatusMessage("先停一下", 1200);
   }
   syncControlHub();
+  syncAmbientPresence({ immediate: true });
 }
 
 function initVoiceRecognition() {
@@ -3243,6 +3714,8 @@ function initVoiceRecognition() {
     document.body.classList.add("listening-mode");
     setStatusMessage("在听", 0);
     syncControlHub();
+    noteAmbientActivity();
+    syncAmbientPresence({ immediate: true });
   };
 
   recognition.onresult = (event) => {
@@ -3270,12 +3743,14 @@ function initVoiceRecognition() {
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       setStatusMessage("这里还不能直接说", 1800);
       syncControlHub();
+      syncAmbientPresence({ immediate: true });
       return;
     }
 
     if (event.error === "no-speech") {
       setStatusMessage("刚刚没听清", 1400);
       syncControlHub();
+      syncAmbientPresence({ immediate: true });
       return;
     }
 
@@ -3285,6 +3760,7 @@ function initVoiceRecognition() {
 
     setStatusMessage("这里还不能直接说", 1800);
     syncControlHub();
+    syncAmbientPresence({ immediate: true });
   };
 
   recognition.onend = () => {
@@ -3296,6 +3772,7 @@ function initVoiceRecognition() {
       setStatusMessage("", 0);
     }
     syncControlHub();
+    syncAmbientPresence({ immediate: true });
   };
 }
 
@@ -3314,6 +3791,7 @@ function startVoiceCapture() {
   }
 
   try {
+    noteAmbientActivity();
     recognition.start();
   } catch {
     setStatusMessage("这里还不能直接说", 1800);
@@ -3403,6 +3881,7 @@ function init() {
   initVoiceRecognition();
   bindEvents();
   syncControlHub();
+  syncReviewTools();
 }
 
 async function handleDisablePin() {
@@ -3473,6 +3952,7 @@ function bindEvents() {
 
   if (elements.enterWritingBtn) {
     elements.enterWritingBtn.addEventListener("click", () => {
+      primeAmbientSound();
       if (state.onboardingTransitioning) return;
       if (state.isFirstTimeUser && state.onboardingStep < FIRST_TIME_ONBOARDING_STEPS.length - 1) {
         state.onboardingStep += 1;
@@ -3487,15 +3967,18 @@ function bindEvents() {
   elements.rawMemoryInput.addEventListener("focus", () => {
     if (!implicitSession.startMs) implicitSession.startMs = Date.now();
     document.body.classList.add("focus-mode");
+    noteAmbientActivity();
   });
 
   elements.rawMemoryInput.addEventListener("blur", () => {
     document.body.classList.remove("focus-mode");
+    syncAmbientPresence();
   });
 
   elements.rawMemoryInput.addEventListener("keydown", (event) => {
     implicitSession.hasTyped = true;
     if (event.key === "Backspace" || event.key === "Delete") implicitSession.backspaceCount += 1;
+    noteAmbientActivity();
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
       submitEntry();
@@ -3505,6 +3988,7 @@ function bindEvents() {
   elements.rawMemoryInput.addEventListener("input", (event) => {
     state.draft = event.target.value;
     window.localStorage.setItem(DRAFT_KEY, state.draft);
+    noteAmbientActivity();
     if (state.controlHubOpen) {
       setAnchorPickerOpen(false);
       setControlHubOpen(false);
@@ -3514,12 +3998,14 @@ function bindEvents() {
   elements.rawMemoryInput.addEventListener("dblclick", (event) => {
     const input = event.currentTarget;
     if (!input.value || input.selectionStart === input.value.length) {
+      noteAmbientActivity();
       startVoiceCapture();
     }
   });
 
   if (elements.controlEntry) {
     elements.controlEntry.addEventListener("click", () => {
+      primeAmbientSound();
       setControlHubOpen(!state.controlHubOpen);
     });
   }
@@ -3531,8 +4017,10 @@ function bindEvents() {
   }
 
   if (elements.controlHistory) {
-    elements.controlHistory.addEventListener("click", () => {
-      openHistoryOverlay();
+    elements.controlHistory.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openHistory();
     });
   }
 
@@ -3568,6 +4056,27 @@ function bindEvents() {
     });
   }
 
+  if (elements.reviewToolsEntry) {
+    elements.reviewToolsEntry.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      noteAmbientActivity();
+      setReviewToolsOpen(!state.reviewToolsOpen);
+    });
+  }
+
+  elements.readingFontButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setReadingFont(button.dataset.readingFont || "system");
+    });
+  });
+
+  elements.ambientSoundButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setAmbientSoundLevel(button.dataset.ambientSound || AMBIENT_SOUND_LEVELS.off, { interactive: true });
+    });
+  });
+
   if (elements.echoCardClose) {
     elements.echoCardClose.addEventListener("click", () => hideEchoCard());
   }
@@ -3588,6 +4097,8 @@ function bindEvents() {
   }
 
   document.addEventListener("keydown", (event) => {
+    primeAmbientSound();
+
     if (event.ctrlKey && event.code === "Space") {
       event.preventDefault();
       startVoiceCapture();
@@ -3601,6 +4112,10 @@ function bindEvents() {
     }
 
     if (event.key === "Escape" && state.historyOpen) {
+      if (state.reviewToolsOpen) {
+        setReviewToolsOpen(false);
+        return;
+      }
       closeHistory();
       return;
     }
@@ -3616,16 +4131,31 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    primeAmbientSound();
+
+    if (elements.controlHub?.contains(event.target)) return;
+
     if (state.historyOpen) {
-      if (elements.historyPanel.contains(event.target)) return;
+      if (elements.historyPanel.contains(event.target)) {
+        if (state.reviewToolsOpen && elements.reviewTools && !elements.reviewTools.contains(event.target)) {
+          setReviewToolsOpen(false);
+        }
+        return;
+      }
+      setReviewToolsOpen(false);
       closeHistory();
       return;
     }
 
+    primeAmbientSound();
+
     if (!state.controlHubOpen || !elements.controlHub) return;
-    if (elements.controlHub.contains(event.target)) return;
     setAnchorPickerOpen(false);
     setControlHubOpen(false);
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    syncAmbientPresence({ immediate: true });
   });
 
   window.addEventListener("resize", () => {
@@ -3642,6 +4172,8 @@ async function submitEntry() {
   if (voiceState.listening) {
     stopVoiceCapture({ silent: true });
   }
+
+  noteAmbientActivity();
 
   const content = elements.rawMemoryInput.value.trim();
   if (!content && !state.activeAnchor) {
@@ -3758,19 +4290,34 @@ function triggerSystemEcho() {
   renderEchoBlock({ echo: "", question: "", pattern_hint: "" });
 }
 
-function closeHistory() {
+function closeHistory({ immediate = false } = {}) {
   if (!state.historyOpen || !elements.historyPanel || elements.historyPanel.classList.contains("hidden")) {
     return;
   }
 
   state.historyOpen = false;
+  setReviewToolsOpen(false);
   elements.historyPanel.setAttribute("aria-hidden", "true");
-  elements.historyPanel.classList.remove("hidden");
-  elements.historyPanel.classList.add("is-closing");
+  noteAmbientActivity();
 
   if (closeHistory._timer) {
     window.clearTimeout(closeHistory._timer);
+    closeHistory._timer = null;
   }
+
+  if (immediate) {
+    elements.historyPanel.classList.add("hidden");
+    elements.historyPanel.classList.remove("is-closing");
+    if (!elements.composeView.classList.contains("hidden")) {
+      elements.rawMemoryInput.focus();
+    }
+    syncControlHub();
+    syncAmbientPresence({ immediate: true });
+    return;
+  }
+
+  elements.historyPanel.classList.remove("hidden");
+  elements.historyPanel.classList.add("is-closing");
 
   closeHistory._timer = window.setTimeout(() => {
     elements.historyPanel.classList.add("hidden");
@@ -3780,6 +4327,7 @@ function closeHistory() {
       elements.rawMemoryInput.focus();
     }
     syncControlHub();
+    syncAmbientPresence({ immediate: true });
   }, 280);
 }
 
@@ -4140,6 +4688,7 @@ function cleanupEchoChain() {
 }
 
 function renderHistory() {
+  if (!elements.historyList || !elements.historyEntryTemplate) return;
   elements.historyList.innerHTML = "";
   if (elements.historyPatternLayer) {
     const hasInsight = state.entries.length > 0;
@@ -4656,11 +5205,8 @@ function loadEntryForEdit(id) {
   state.editingId = id;
   state.activeAnchor = entry.metadata?.anchor || null;
   syncControlHub();
-
-  elements.historyPanel.classList.add("hidden");
-  elements.historyPanel.classList.remove("is-closing");
-  elements.historyPanel.setAttribute("aria-hidden", "true");
-  state.historyOpen = false;
+  closeHistory({ immediate: true });
+  setReviewToolsOpen(false);
   elements.rawMemoryInput.focus();
   hideEchoCard(true);
   renderEchoBlock(entry.analysis?.response || { echo: "", question: "", pattern_hint: "" });
@@ -4701,9 +5247,15 @@ function showView(viewName) {
     setControlHubOpen(false);
   }
 
+  if (viewName !== "history") {
+    setReviewToolsOpen(false);
+  }
+
   if (viewName === "onboarding") {
     animateTraceMark(elements.onboardingTraceMark, "is-sealing", MOTION.logoSealMs);
   }
+
+  syncAmbientPresence({ immediate: true });
 }
 function exportEntries() {
   const payload = JSON.stringify(state.entries, null, 2);

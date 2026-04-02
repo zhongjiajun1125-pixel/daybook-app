@@ -713,6 +713,89 @@ body.listening-mode .status-indicator {
   opacity: 0.68;
 }
 
+.review-tools {
+  width: var(--content-rail);
+  margin: calc(var(--space-xs) * -0.35) auto var(--space-m);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-xs);
+}
+
+.review-tools-entry {
+  color: var(--text-ghost);
+  cursor: pointer;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  opacity: 0.46;
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid);
+}
+
+.review-tools-entry:hover {
+  color: var(--text-secondary);
+  opacity: 0.68;
+}
+
+.review-tools-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    max-height var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-base) var(--motion-ease-fluid);
+}
+
+.review-tools.is-open .review-tools-body {
+  max-height: 8.5rem;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.review-tool-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.review-tool-label {
+  color: var(--text-ghost);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  opacity: 0.54;
+}
+
+.review-tool-option {
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  opacity: 0.62;
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid);
+}
+
+.review-tool-option:hover {
+  color: var(--text-primary);
+  opacity: 0.84;
+}
+
+.review-tool-option.is-active {
+  color: var(--text-primary);
+  opacity: 0.94;
+}
+
 .close-btn {
   color: var(--text-ghost);
   cursor: pointer;
@@ -745,7 +828,7 @@ body.listening-mode .status-indicator {
   line-height: 1.76;
   color: var(--text-primary);
   opacity: 0.9;
-  font-family: var(--font-serif);
+  font-family: var(--font-ui);
 }
 
 .insight-graph {
@@ -847,7 +930,7 @@ body.listening-mode .status-indicator {
   color: var(--text-primary);
   line-height: 1.82;
   white-space: normal;
-  font-family: var(--font-serif);
+  font-family: var(--font-ui);
 }
 .history-echo-text {
   max-width: 30ch;
@@ -856,6 +939,12 @@ body.listening-mode .status-indicator {
   color: var(--text-secondary);
   opacity: 0.68;
   white-space: normal;
+  font-family: var(--font-ui);
+}
+
+body[data-reading-font="serif"] .history-narrative-line,
+body[data-reading-font="serif"] .history-raw-text,
+body[data-reading-font="serif"] .history-echo-text {
   font-family: var(--font-serif);
 }
 
