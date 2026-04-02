@@ -26,7 +26,345 @@ const MOTION = Object.freeze({
   logoEchoMs: 760,
   echoCardHoldMs: 4600,
   echoCardExitMs: 380,
+  onboardingSwapMs: 280,
 });
+
+const FIRST_TIME_ONBOARDING_STEPS = Object.freeze([
+  {
+    line: "先留下这一句。",
+    action: "继续",
+  },
+  {
+    line: "有些东西，会再回来。",
+    action: "继续",
+  },
+  {
+    line: "一句就够了。",
+    action: "开始",
+  },
+]);
+
+const RETURNING_THRESHOLD_STATE = Object.freeze({
+  line: "它还在这里。",
+  action: "继续",
+});
+
+const DEAD_GENERIC_ECHO_LINES = Object.freeze([
+  "你刚刚留下了一段此刻。",
+  "你刚刚留下了一段话。",
+  "它已经被收进这次记录里。",
+  "你写下的不只是内容，还有当时的状态。",
+  "某个内容再次出现。",
+  "一些内容总是在相似的时段出现。",
+  "这段记录有一些停顿。",
+  "这段记录存在停顿。",
+  "有一个内容持续被提到。",
+  "它一直没有变化。",
+  "也没有继续往下发展。",
+]);
+
+const ECHO_TONE_SEQUENCE = Object.freeze({
+  direct: ["direct", "movement", "soft", "residue"],
+  soft: ["soft", "residue", "movement", "direct"],
+  residue: ["residue", "soft", "movement", "direct"],
+  movement: ["movement", "soft", "residue", "direct"],
+});
+
+const ECHO_LANGUAGE_LIBRARY = {
+  circling: {
+    direct: [
+      ({ topicSpot, topicMatter }) => `还是回到${topicSpot}了。`,
+      ({ topicMatter }) => `${topicMatter}，你没有真正离开。`,
+      ({ topicSpot }) => `${topicSpot}这里，你又碰到了。`,
+    ],
+    soft: [
+      ({ topicMatter }) => `${topicMatter}又在附近了。`,
+      ({ topicSpot }) => `你又轻轻碰到了${topicSpot}。`,
+      ({ topicMatter }) => `${topicMatter}还没有退开。`,
+    ],
+    residue: [
+      ({ topicMatter }) => `${topicMatter}的余波还没退下去。`,
+      ({ topicSpot }) => `${topicSpot}这个轮廓还在。`,
+      ({ topicMatter }) => `${topicMatter}还留着一点回声。`,
+    ],
+    movement: [
+      ({ topicSpot }) => `绕了一圈，又落回${topicSpot}。`,
+      ({ topicMatter }) => `路径变了，落点还是${topicMatter}。`,
+      ({ topicSpot }) => `兜了一圈，还是回到${topicSpot}。`,
+    ],
+  },
+  stalled_return: {
+    direct: [
+      ({ topicSpot }) => `${topicSpot}这里还是没动。`,
+      () => "它回来过几次，位置没变。",
+      () => "你还停在同一个地方。",
+    ],
+    soft: [
+      () => "它一直停在差不多的地方。",
+      () => "这件事还卡在原处。",
+      () => "它还是落在同一个位置上。",
+    ],
+    residue: [
+      () => "那个点一直没有退下去。",
+      () => "它还留在原来的位置上。",
+      () => "它没有散开，只是留着。",
+    ],
+    movement: [
+      () => "回来过几次，还是停在这里。",
+      () => "走了几步，又停回原处。",
+      () => "每次回来，都差不多停在这里。",
+    ],
+  },
+  held_back: {
+    direct: [
+      () => "最关键的那句还没落下来。",
+      () => "你停在要说透之前了。",
+      () => "核心就在附近，但你收住了。",
+    ],
+    soft: [
+      () => "还有一层没有打开。",
+      () => "这句话停得有点早。",
+      () => "你已经碰到边了。",
+    ],
+    residue: [
+      () => "有东西浮出来了一下，又退回去了。",
+      () => "那个点露了一下，又收住了。",
+      () => "快成形了，又散掉了。",
+    ],
+    movement: [
+      () => "你靠近了，又往后退了一步。",
+      () => "这次已经走到门口了。",
+      () => "你不是没到，只是停住了。",
+    ],
+  },
+  almost_said: {
+    direct: [
+      () => "已经碰到核心了，只差最后一句。",
+      () => "这次更像差一点就说出来。",
+      () => "最里面那层已经露头了。",
+    ],
+    soft: [
+      () => "它已经快到表面了。",
+      () => "差一点就会更清楚。",
+      () => "这里已经很靠近了。",
+    ],
+    residue: [
+      () => "那句话已经成形了一半。",
+      () => "它已经到了边上，还没真正落下。",
+      () => "快要留下来了，又停了一下。",
+    ],
+    movement: [
+      () => "你已经走近了，只差最后一点。",
+      () => "再往里一步，可能就到了。",
+      () => "这次不是没开始，是停在最后一小段。",
+    ],
+  },
+  drift: {
+    direct: [
+      () => "问题还在，注意力先走开了。",
+      () => "你在绕开中心。",
+      () => "这段话先往旁边散开了。",
+    ],
+    soft: [
+      () => "它有点散开了。",
+      () => "重心没有完全落下。",
+      () => "你没有停住，但也没有落下去。",
+    ],
+    residue: [
+      () => "中心还在，只是被拉远了一点。",
+      () => "那个点没有消失，只是变淡了。",
+      () => "它还在，只是被放到了边上。",
+    ],
+    movement: [
+      () => "你先往外绕了一圈，中心还留在原地。",
+      () => "这次走得更远，但还是绕着它。",
+      () => "注意力先飘开了，问题没有跟着走。",
+    ],
+  },
+  pre_start: {
+    direct: [
+      () => "还是停在开始之前。",
+      () => "你又走到门口了，但没进去。",
+      () => "事情还卡在起步前面。",
+    ],
+    soft: [
+      () => "这里又停在了要开始的时候。",
+      () => "你已经走到边上了，还没往里去。",
+      () => "它还留在开始前那一下。",
+    ],
+    residue: [
+      () => "那个起点一直没有真正被踩下去。",
+      () => "开始的动作露出来了，还没成形。",
+      () => "门口还在，你还是停在那里。",
+    ],
+    movement: [
+      () => "你又走到门口，然后停住了。",
+      () => "每次往前一点，还是停在开始前。",
+      () => "这条线一直把你带到门口。",
+    ],
+  },
+  inward_pull: {
+    direct: [
+      () => "这段话在往里收。",
+      () => "你在退回自己里面。",
+      () => "它没有展开，先收回去了。",
+    ],
+    soft: [
+      () => "它慢慢往里缩了一点。",
+      () => "你先把它收在里面了。",
+      () => "这次没有往外打开。",
+    ],
+    residue: [
+      () => "外面的声响退下去了，里面还留着。",
+      () => "它收回去了，但没有过去。",
+      () => "这股力气在往里回。",
+    ],
+    movement: [
+      () => "它没有往前推，先往里退了。",
+      () => "你刚碰到它，又往里面缩回去。",
+      () => "这次不是展开，而是回收。",
+    ],
+  },
+  quiet_weight: {
+    direct: [
+      ({ emotionPhrase }) => `表面很轻，下面更像是${emotionPhrase}。`,
+      () => "这句话很安静，分量并不轻。",
+      () => "它看起来轻，里面却压着东西。",
+    ],
+    soft: [
+      () => "这里比看上去要重一点。",
+      () => "它没有很响，但也不轻。",
+      () => "这段话下面还有一层重量。",
+    ],
+    residue: [
+      () => "安静只是表面，下面还留着分量。",
+      () => "这点安静里还压着一点东西。",
+      () => "它没有发出来，但没有散掉。",
+    ],
+    movement: [
+      () => "它没有往外冲，只是在里面压着。",
+      () => "表面很平，下面还在慢慢往下沉。",
+      () => "声音不大，重量还在往下坠。",
+    ],
+  },
+  loosening: {
+    direct: [
+      () => "这里开始松了。",
+      () => "它没有之前那么紧了。",
+      () => "有一点动了。",
+    ],
+    soft: [
+      () => "这次比之前更靠近一点。",
+      () => "这里开始有缝了。",
+      () => "它不再完全停住了。",
+    ],
+    residue: [
+      () => "僵住的地方松开了一点。",
+      () => "那个结还在，但已经没那么紧。",
+      () => "它还是那个位置，只是没那么硬了。",
+    ],
+    movement: [
+      () => "这次往前推了一点。",
+      () => "你开始从原地挪开了。",
+      () => "这里终于有了一点方向。",
+    ],
+  },
+  time_return: {
+    direct: [
+      ({ timePhrase }) => `它总在${timePhrase}回来。`,
+      ({ timePhrase }) => `${timePhrase}一到，它就更靠近你。`,
+      ({ timePhrase }) => `${timePhrase}像是在替它把门打开。`,
+    ],
+    soft: [
+      ({ timePhrase }) => `有些东西总在${timePhrase}靠近。`,
+      ({ timePhrase }) => `${timePhrase}一来，这一类内容就会浮上来。`,
+      ({ timePhrase }) => `这件事和${timePhrase}有点熟。`,
+    ],
+    residue: [
+      ({ timePhrase }) => `${timePhrase}里总留着一点它的余波。`,
+      ({ timePhrase }) => `一到${timePhrase}，它就没完全退开。`,
+      ({ timePhrase }) => `${timePhrase}像是把它重新带回来。`,
+    ],
+    movement: [
+      ({ timePhrase }) => `每次靠近${timePhrase}，它都会往前一步。`,
+      ({ timePhrase }) => `${timePhrase}一到，它就顺着回来了。`,
+      ({ timePhrase }) => `它总是沿着${timePhrase}这条线回来。`,
+    ],
+  },
+  trace: {
+    direct: [
+      () => "这里还没有完全落下。",
+      () => "你写到这里，又轻轻收住了。",
+      () => "这次更像是在边上停了一下。",
+    ],
+    soft: [
+      () => "这里还留着一点没说完。",
+      () => "它落下了一些，还没全部落下。",
+      () => "你在这里停了一下。",
+    ],
+    residue: [
+      () => "它已经留下一点痕迹了。",
+      () => "这里有一点余下来的东西。",
+      () => "它没有完全散掉。",
+    ],
+    movement: [
+      () => "你走到这里，先停了一下。",
+      () => "它已经动了一点，还没真正展开。",
+      () => "这句已经落下，后面还没跟上。",
+    ],
+  },
+};
+
+const SCHEDULED_ECHO_COMPANIONS = {
+  repeat: {
+    l2: [
+      () => "它不是第一次回来了。",
+      () => "绕了一圈，还是落在这里。",
+      () => "那个点一直没有退下去。",
+    ],
+    l3: [
+      () => "到这里为止，它还没有散开。",
+      () => "你一直没有离开这个位置。",
+      () => "它还留在原来的地方。",
+    ],
+  },
+  time: {
+    l2: [
+      ({ timePhrase }) => `${timePhrase}像是更容易把它带回来。`,
+      ({ timePhrase }) => `一到${timePhrase}，它就更容易浮上来。`,
+      ({ timePhrase }) => `这个时段总会碰到它。`,
+    ],
+    l3: [
+      () => "它已经不只是偶然了。",
+      () => "这条线留得比你想的更久。",
+      () => "它总会在差不多的时候回来。",
+    ],
+  },
+  friction: {
+    l2: [
+      () => "这次的停顿不是偶然。",
+      () => "你不是没话说，只是一直在收住。",
+      () => "它总停在要说透之前。",
+    ],
+    l3: [
+      () => "那个点一直没有真正落下来。",
+      () => "最里面那层还没有打开。",
+      () => "它已经到了边上，还没真正出来。",
+    ],
+  },
+  open_loop: {
+    l2: [
+      () => "它回来过几次，位置没怎么变。",
+      () => "你总会走到这里，然后停住。",
+      () => "每次都像快开始了，又收回去。",
+    ],
+    l3: [
+      () => "到这里为止，还是没有往下走。",
+      () => "它还停在开始之前。",
+      () => "这条线一直没有真正动起来。",
+    ],
+  },
+};
 
 let audioCtx = null;
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -209,6 +547,7 @@ const elements = {
   pinSubmitBtn: document.getElementById("pin-submit-btn"),
   pinCancelBtn: document.getElementById("pin-cancel-btn"),
   onboardingView: document.getElementById("onboarding-view"),
+  thresholdShell: document.getElementById("threshold-shell"),
   onboardingTraceMark: document.getElementById("onboarding-trace-mark"),
   thresholdLine: document.getElementById("threshold-line"),
   enterWritingBtn: document.getElementById("enter-writing-btn"),
@@ -256,6 +595,9 @@ let state = {
   pendingEcho: null,
   lastEchoText: null,
   echoCooldownUntil: 0,
+  isFirstTimeUser: true,
+  onboardingStep: 0,
+  onboardingTransitioning: false,
 };
 
 let implicitSession = {
@@ -709,8 +1051,1314 @@ function loadPredictionState() {
   }
 }
 
+const OBSERVATION_MODEL_VERSION = 1;
+
+const ObservationLexicon = {
+  uncertainty: ["好像", "似乎", "可能", "也许", "说不上", "不知道", "大概", "仿佛", "好像也"],
+  negation: ["不", "没", "没有", "不是", "别", "未", "无"],
+  selfCorrection: ["其实", "或者", "不对", "不是这个", "更像", "应该说", "算了", "删掉", "改成"],
+  contradiction: ["但是", "可是", "却", "又", "明明", "一边", "同时", "一方面", "另一方面"],
+  minimization: ["还好", "没什么", "就这样", "也还行", "算正常", "一点点", "没那么", "先这样"],
+  avoidance: ["先不", "算了", "躲", "逃", "拖", "以后再说", "不想碰", "不想打开", "跳过", "略过"],
+  suppression: ["忍着", "压着", "憋着", "收着", "吞下去", "别说", "不提", "按住", "咽回去"],
+  abstraction: ["意义", "状态", "问题", "东西", "那些", "这一切", "感觉", "生活", "方向", "价值", "关系", "事情"],
+  concreteness: ["今天", "昨天", "刚才", "早上", "晚上", "地铁", "办公室", "床上", "电话", "消息", "吃饭", "睡觉", "走路", "开会", "回家"],
+  intensity: ["很", "太", "特别", "一直", "完全", "根本", "一下子", "反复", "总是", "忽然"],
+  isolation: ["一个人", "没人", "不联系", "关起来", "躲起来", "不想见", "不想说", "不回应"],
+  entanglement: ["离不开", "总要顾及", "放不下", "纠缠", "牵着", "被拽着", "扯住"],
+  rolePressure: ["应该", "必须", "得", "不能", "负责", "体面", "交代", "稳定", "成熟", "懂事", "配得上"],
+  comparison: ["别人", "大家", "他们都", "应该像", "比我", "不如", "落后", "跟不上"],
+  externalDemand: ["要交", "要做", "要负责", "被要求", "要表现", "要回应", "得撑住", "得稳住"],
+  internalDesire: ["我想", "我只想", "其实想", "更想", "希望", "想要", "宁愿", "只想"],
+  identityPerformance: ["证明", "配得上", "体面", "像样", "不让人失望", "被看见", "看起来", "应该成为"],
+  socialOthers: ["他", "她", "他们", "别人", "大家", "父母", "老板", "同事", "朋友", "家里", "我们"],
+  family: ["父母", "家里", "妈妈", "爸爸", "家人", "亲戚"],
+  work: ["工作", "上班", "项目", "汇报", "老板", "同事", "邮件", "交付", "任务", "开会"],
+  intimacy: ["他", "她", "我们", "关系", "亲密", "喜欢", "爱", "分开", "靠近"],
+  desireConflict: ["想", "又不想", "想要", "又怕", "明明", "但是"],
+  collapse: ["撑不住", "散掉", "崩", "垮", "空白", "麻木"],
+  repair: ["松了", "靠近", "开始", "终于", "动了", "往前", "看见"],
+};
+
+function averageNumbers(values) {
+  if (!values?.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function medianNumbers(values) {
+  if (!values?.length) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function varianceNumbers(values) {
+  if (!values?.length) return 0;
+  const avg = averageNumbers(values);
+  return averageNumbers(values.map((value) => (value - avg) ** 2));
+}
+
+function clamp01(value) {
+  return Math.min(Math.max(value, 0), 1);
+}
+
+function scoreBand(score) {
+  if (score >= 0.75) return "strong";
+  if (score >= 0.54) return "medium";
+  return "weak";
+}
+
+function splitNarrativeUnits(text) {
+  const normalized = (text || "").replace(/\r/g, "").trim();
+  if (!normalized) return [];
+  return normalized
+    .split(/[。！？!?；;\n]/)
+    .map((unit) => unit.trim())
+    .filter(Boolean);
+}
+
+function collectMarkerHits(text, markers = []) {
+  return markers.filter((marker) => text.includes(marker));
+}
+
+function uniqueValues(values = []) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function findRepeatedNarrativeFragment(units = []) {
+  const normalized = units
+    .map((unit) => unit.replace(/\s+/g, "").trim())
+    .filter((unit) => unit.length >= 3);
+  if (!normalized.length) return { fragment: "", count: 0, ratio: 0 };
+
+  const counts = normalized.reduce((accumulator, unit) => {
+    accumulator[unit] = (accumulator[unit] || 0) + 1;
+    return accumulator;
+  }, {});
+  const fragment = Object.keys(counts).reduce((left, right) => (counts[left] >= counts[right] ? left : right));
+  const count = counts[fragment] || 0;
+
+  return {
+    fragment: count >= 2 ? fragment : "",
+    count,
+    ratio: count >= 2 ? count / normalized.length : 0,
+  };
+}
+
+function createObservationSignal({
+  key,
+  layer,
+  score,
+  source,
+  horizon,
+  mode,
+  evidence = [],
+  note = "",
+}) {
+  const normalized = clamp01(score);
+  if (normalized < 0.34) return null;
+  return {
+    key,
+    layer,
+    score: Number(normalized.toFixed(3)),
+    strength: scoreBand(normalized),
+    source,
+    horizon,
+    mode,
+    evidence: evidence.filter(Boolean).slice(0, 5),
+    note,
+  };
+}
+
+function pushObservationSignal(target, config) {
+  const signal = createObservationSignal(config);
+  if (signal) target.push(signal);
+}
+
+function profileEntryForObservation(entry) {
+  const text = (entry?.content || "").trim();
+  const units = splitNarrativeUnits(text);
+  const charCount = text.replace(/\s+/g, "").length;
+  const unitLengths = units.map((unit) => unit.length);
+  const avgUnitLength = averageNumbers(unitLengths);
+  const repeatedFragment = findRepeatedNarrativeFragment(units);
+  const fragmentRatio = units.length
+    ? units.filter((unit) => unit.length <= 10).length / units.length
+    : (charCount > 0 && charCount <= 10 ? 1 : 0);
+
+  const uncertaintyHits = collectMarkerHits(text, ObservationLexicon.uncertainty);
+  const negationHits = collectMarkerHits(text, ObservationLexicon.negation);
+  const selfCorrectionHits = collectMarkerHits(text, ObservationLexicon.selfCorrection);
+  const contradictionHits = collectMarkerHits(text, ObservationLexicon.contradiction);
+  const minimizationHits = collectMarkerHits(text, ObservationLexicon.minimization);
+  const avoidanceHits = collectMarkerHits(text, ObservationLexicon.avoidance);
+  const suppressionHits = collectMarkerHits(text, ObservationLexicon.suppression);
+  const abstractionHits = collectMarkerHits(text, ObservationLexicon.abstraction);
+  const concretenessHits = collectMarkerHits(text, ObservationLexicon.concreteness);
+  const intensityHits = collectMarkerHits(text, ObservationLexicon.intensity);
+  const rolePressureHits = collectMarkerHits(text, ObservationLexicon.rolePressure);
+  const comparisonHits = collectMarkerHits(text, ObservationLexicon.comparison);
+  const externalDemandHits = collectMarkerHits(text, ObservationLexicon.externalDemand);
+  const internalDesireHits = collectMarkerHits(text, ObservationLexicon.internalDesire);
+  const identityPerformanceHits = collectMarkerHits(text, ObservationLexicon.identityPerformance);
+  const isolationHits = collectMarkerHits(text, ObservationLexicon.isolation);
+  const entanglementHits = collectMarkerHits(text, ObservationLexicon.entanglement);
+  const familyHits = collectMarkerHits(text, ObservationLexicon.family);
+  const workHits = collectMarkerHits(text, ObservationLexicon.work);
+  const intimacyHits = collectMarkerHits(text, ObservationLexicon.intimacy);
+  const socialOthersHits = collectMarkerHits(text, ObservationLexicon.socialOthers);
+  const unfinishedTail = /[，、,:：\-—～…]$|(?:但是|可是|然后|因为|如果|只是|还是)$/.test(text);
+  const coherenceScore = clamp01(
+    0.28
+      + (concretenessHits.length * 0.12)
+      + Math.min(units.length, 4) * 0.05
+      + (charCount > 18 ? 0.08 : 0)
+      - fragmentRatio * 0.32
+      - contradictionHits.length * 0.07
+      - uncertaintyHits.length * 0.05,
+  );
+
+  return {
+    id: entry.id,
+    timestampMs: new Date(entry.timestamp).getTime(),
+    text,
+    units,
+    charCount,
+    unitCount: units.length,
+    avgUnitLength,
+    fragmentRatio,
+    repeatedFragment,
+    unfinishedTail,
+    uncertaintyHits,
+    negationHits,
+    selfCorrectionHits,
+    contradictionHits,
+    minimizationHits,
+    avoidanceHits,
+    suppressionHits,
+    abstractionHits,
+    concretenessHits,
+    intensityHits,
+    rolePressureHits,
+    comparisonHits,
+    externalDemandHits,
+    internalDesireHits,
+    identityPerformanceHits,
+    isolationHits,
+    entanglementHits,
+    familyHits,
+    workHits,
+    intimacyHits,
+    socialOthersHits,
+    topics: inferTopics(text, entry),
+    defense: inferDefenseSignal(text, entry),
+    emotion: detectEmotion(text, entry),
+    anchor: entry.metadata?.anchor || "",
+    friction: entry.context?.friction || 0,
+    durationSec: entry.context?.durationSec || 0,
+    timePhase: entry.context?.timePhase || resolveTimePhase(new Date(entry.timestamp || Date.now())),
+    coherenceScore,
+  };
+}
+
+const ObservationEngine = {
+  observe(currentEntry, entries, memory) {
+    const context = this.createContext(currentEntry, entries, memory);
+    const languageForm = this.buildLanguageFormLayer(context);
+    const timeBehavior = this.buildTimeBehaviorLayer(context);
+    const socialContext = this.buildSocialContextLayer(context);
+    const trajectory = this.buildTrajectoryLayer(context, languageForm, timeBehavior, socialContext, memory);
+    const psychologicalDynamic = this.buildPsychologicalDynamicLayer(
+      context,
+      languageForm,
+      timeBehavior,
+      trajectory,
+      socialContext,
+      memory,
+    );
+    const longitudinalMemory = this.buildLongitudinalMemoryLayer(
+      context,
+      languageForm,
+      timeBehavior,
+      trajectory,
+      socialContext,
+      psychologicalDynamic,
+      memory,
+    );
+    const layers = {
+      languageForm,
+      timeBehavior,
+      trajectory,
+      psychologicalDynamic,
+      socialContext,
+      longitudinalMemory,
+    };
+    const inference = this.buildInference(layers, context);
+    const classes = this.buildObservationClasses(layers, inference, context);
+    const outputReadiness = this.buildOutputReadiness(layers, inference, classes, context);
+
+    return {
+      version: OBSERVATION_MODEL_VERSION,
+      createdAt: new Date().toISOString(),
+      layers,
+      inference,
+      classes,
+      outputReadiness,
+      signalInventory: Object.values(layers).flatMap((layer) => layer.signals || []),
+    };
+  },
+
+  createContext(currentEntry, entries, memory) {
+    const deduped = entries
+      .filter(Boolean)
+      .reduce((list, entry) => {
+        if (list.some((item) => item.id === entry.id)) return list;
+        list.push(entry);
+        return list;
+      }, [])
+      .sort((left, right) => new Date(right.timestamp) - new Date(left.timestamp));
+    const previousEntries = deduped.filter((entry) => entry.id !== currentEntry.id);
+    const currentProfile = profileEntryForObservation(currentEntry);
+    const previousProfiles = previousEntries.slice(0, 48).map(profileEntryForObservation);
+    const allProfiles = [currentProfile, ...previousProfiles];
+    const recentProfiles = allProfiles.slice(0, 8);
+    const olderProfiles = allProfiles.slice(8, 16);
+
+    return {
+      currentEntry,
+      currentProfile,
+      allEntries: [currentEntry, ...previousEntries],
+      previousEntries,
+      allProfiles,
+      previousProfiles,
+      recentProfiles,
+      olderProfiles,
+      memory,
+      nowMs: new Date(currentEntry.timestamp).getTime(),
+    };
+  },
+
+  buildLanguageFormLayer(context) {
+    const profile = context.currentProfile;
+    const signals = [];
+    const abstractionBias = clamp01(
+      (profile.abstractionHits.length - profile.concretenessHits.length + 2) / 6,
+    );
+    const contradictionScore = clamp01(
+      (profile.contradictionHits.length + (containsAny(profile.text, ["想", "应该"]) && containsAny(profile.text, ["不想", "不敢", "拖"]) ? 1 : 0)) / 3,
+    );
+
+    pushObservationSignal(signals, {
+      key: "repetition_loop",
+      layer: "language_form",
+      score: clamp01((profile.repeatedFragment.ratio * 1.4) + (profile.repeatedFragment.count >= 3 ? 0.2 : 0)),
+      source: "text",
+      horizon: "short",
+      mode: "direct",
+      evidence: profile.repeatedFragment.fragment ? [profile.repeatedFragment.fragment] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "fragmentation",
+      layer: "language_form",
+      score: profile.fragmentRatio + (profile.unitCount <= 2 && profile.charCount <= 18 ? 0.2 : 0),
+      source: "text",
+      horizon: "short",
+      mode: "direct",
+      evidence: profile.units.slice(0, 3),
+    });
+    pushObservationSignal(signals, {
+      key: "unfinished_syntax",
+      layer: "language_form",
+      score: profile.unfinishedTail ? 0.74 : 0,
+      source: "syntax",
+      horizon: "short",
+      mode: "direct",
+      evidence: [profile.text.slice(-16)],
+    });
+    pushObservationSignal(signals, {
+      key: "uncertainty_markers",
+      layer: "language_form",
+      score: clamp01(profile.uncertaintyHits.length / 3),
+      source: "wording",
+      horizon: "short",
+      mode: "direct",
+      evidence: profile.uncertaintyHits,
+    });
+    pushObservationSignal(signals, {
+      key: "negation_pressure",
+      layer: "language_form",
+      score: clamp01(profile.negationHits.length / 6),
+      source: "wording",
+      horizon: "short",
+      mode: "direct",
+      evidence: profile.negationHits,
+    });
+    pushObservationSignal(signals, {
+      key: "self_correction",
+      layer: "language_form",
+      score: clamp01(profile.selfCorrectionHits.length / 3),
+      source: "wording",
+      horizon: "short",
+      mode: "direct",
+      evidence: profile.selfCorrectionHits,
+    });
+    pushObservationSignal(signals, {
+      key: "contradiction_in_phrasing",
+      layer: "language_form",
+      score: contradictionScore,
+      source: "phrasing",
+      horizon: "short",
+      mode: "inferred",
+      evidence: profile.contradictionHits,
+    });
+    pushObservationSignal(signals, {
+      key: "intensity_spike",
+      layer: "language_form",
+      score: clamp01(profile.intensityHits.length / 4),
+      source: "wording",
+      horizon: "short",
+      mode: "direct",
+      evidence: profile.intensityHits,
+    });
+    pushObservationSignal(signals, {
+      key: "minimization_language",
+      layer: "language_form",
+      score: clamp01((profile.minimizationHits.length + (profile.emotion === "平静" && profile.friction >= 8 ? 1 : 0)) / 3),
+      source: "wording",
+      horizon: "short",
+      mode: "inferred",
+      evidence: profile.minimizationHits,
+    });
+    pushObservationSignal(signals, {
+      key: "avoidance_language",
+      layer: "language_form",
+      score: clamp01((profile.avoidanceHits.length + (profile.defense === "回避" ? 1 : 0)) / 3),
+      source: "wording",
+      horizon: "short",
+      mode: "inferred",
+      evidence: profile.avoidanceHits,
+    });
+    pushObservationSignal(signals, {
+      key: "suppression_language",
+      layer: "language_form",
+      score: clamp01((profile.suppressionHits.length + profile.minimizationHits.length * 0.5) / 3),
+      source: "wording",
+      horizon: "short",
+      mode: "inferred",
+      evidence: [...profile.suppressionHits, ...profile.minimizationHits].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "abstraction_bias",
+      layer: "language_form",
+      score: abstractionBias,
+      source: "wording",
+      horizon: "short",
+      mode: "inferred",
+      evidence: profile.abstractionHits,
+    });
+    pushObservationSignal(signals, {
+      key: "concrete_grounding",
+      layer: "language_form",
+      score: clamp01(profile.concretenessHits.length / 4),
+      source: "wording",
+      horizon: "short",
+      mode: "direct",
+      evidence: profile.concretenessHits,
+    });
+
+    return {
+      metrics: {
+        charCount: profile.charCount,
+        sentenceCount: Math.max(profile.unitCount, profile.text ? 1 : 0),
+        avgSentenceLength: Number(profile.avgUnitLength.toFixed(2)),
+        fragmentRatio: Number(profile.fragmentRatio.toFixed(3)),
+        repetitionRatio: Number(profile.repeatedFragment.ratio.toFixed(3)),
+        unfinishedTail: profile.unfinishedTail,
+        coherenceScore: Number(profile.coherenceScore.toFixed(3)),
+      },
+      dominantFeatures: {
+        surfaceEmotion: profile.emotion,
+        dominantTopic: profile.topics[0] || "",
+        dominantDefense: profile.defense,
+        abstractionBias: Number(abstractionBias.toFixed(3)),
+      },
+      signals,
+    };
+  },
+
+  buildTimeBehaviorLayer(context) {
+    const signals = [];
+    const profiles = context.allProfiles;
+    const gapsHours = [];
+
+    for (let index = 0; index < profiles.length - 1; index += 1) {
+      gapsHours.push((profiles[index].timestampMs - profiles[index + 1].timestampMs) / (1000 * 60 * 60));
+    }
+
+    const gapToPrevious = gapsHours[0] || 0;
+    const medianGap = medianNumbers(gapsHours);
+    const avgGap = averageNumbers(gapsHours);
+    const maxGap = Math.max(...gapsHours, 0);
+    const burst24hCount = profiles.filter((profile) => context.nowMs - profile.timestampMs <= 24 * 60 * 60 * 1000).length;
+    const recentBurstBeforeCurrent = context.previousProfiles
+      .slice(0, 4)
+      .filter((profile) => context.nowMs - profile.timestampMs <= 24 * 60 * 60 * 1000).length;
+    const irregularity = avgGap > 0 ? Math.sqrt(varianceNumbers(gapsHours)) / avgGap : 0;
+    const currentTimePhase = context.currentProfile.timePhase;
+    const samePhaseCount = profiles.slice(0, 12).filter((profile) => profile.timePhase === currentTimePhase).length;
+    const gapBuckets = gapsHours.map((gap) => Math.round(gap / 12) * 12).filter((gap) => gap > 0);
+    const recurringGap = findMostFrequent(gapBuckets) || null;
+
+    pushObservationSignal(signals, {
+      key: "sudden_stop",
+      layer: "time_behavior",
+      score: gapToPrevious >= 36 && recentBurstBeforeCurrent >= 2
+        ? clamp01((gapToPrevious / 96) + (recentBurstBeforeCurrent / 6))
+        : 0,
+      source: "timestamp",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [`gap:${gapToPrevious.toFixed(1)}h`, `burst:${recentBurstBeforeCurrent}`],
+    });
+    pushObservationSignal(signals, {
+      key: "silence_gap",
+      layer: "time_behavior",
+      score: gapToPrevious > 0 ? clamp01(Math.max(gapToPrevious / Math.max(medianGap || 24, 24), gapToPrevious / 96) / 2.2) : 0,
+      source: "timestamp",
+      horizon: "mid",
+      mode: "direct",
+      evidence: gapToPrevious ? [`gap:${gapToPrevious.toFixed(1)}h`] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "burst_writing",
+      layer: "time_behavior",
+      score: clamp01((burst24hCount - 1) / 4),
+      source: "timestamp",
+      horizon: "mid",
+      mode: "direct",
+      evidence: burst24hCount ? [`24h:${burst24hCount}`] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "irregular_rhythm",
+      layer: "time_behavior",
+      score: clamp01(irregularity / 1.4),
+      source: "timestamp",
+      horizon: "long",
+      mode: "inferred",
+      evidence: irregularity ? [`cv:${irregularity.toFixed(2)}`] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "time_phase_return",
+      layer: "time_behavior",
+      score: clamp01((samePhaseCount - 1) / 4),
+      source: "timestamp",
+      horizon: "long",
+      mode: "inferred",
+      evidence: currentTimePhase ? [`phase:${currentTimePhase}`, `count:${samePhaseCount}`] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "recurrence_cycle",
+      layer: "time_behavior",
+      score: recurringGap && gapBuckets.filter((gap) => gap === recurringGap).length >= 3
+        ? clamp01(gapBuckets.filter((gap) => gap === recurringGap).length / 5)
+        : 0,
+      source: "timestamp",
+      horizon: "long",
+      mode: "inferred",
+      evidence: recurringGap ? [`cycle:${recurringGap}h`] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "return_after_gap",
+      layer: "time_behavior",
+      score: gapToPrevious >= 48 && context.currentProfile.topics.some((topic) =>
+        context.previousProfiles.slice(0, 12).some((profile) => profile.topics.includes(topic)),
+      )
+        ? clamp01(gapToPrevious / 120)
+        : 0,
+      source: "timestamp+topic",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: context.currentProfile.topics.slice(0, 2),
+    });
+
+    return {
+      metrics: {
+        gapToPreviousHours: Number(gapToPrevious.toFixed(2)),
+        medianGapHours: Number(medianGap.toFixed(2)),
+        averageGapHours: Number(avgGap.toFixed(2)),
+        maxGapHours: Number(maxGap.toFixed(2)),
+        burst24hCount,
+        irregularity: Number(irregularity.toFixed(3)),
+        samePhaseCount,
+        recurringGapHours: recurringGap || 0,
+      },
+      signals,
+    };
+  },
+
+  buildSocialContextLayer(context) {
+    const profile = context.currentProfile;
+    const signals = [];
+    const demandVsDesireGap = Math.max(
+      0,
+      profile.rolePressureHits.length + profile.externalDemandHits.length - profile.internalDesireHits.length,
+    );
+
+    pushObservationSignal(signals, {
+      key: "family_context",
+      layer: "social_context",
+      score: clamp01(profile.familyHits.length / 3),
+      source: "wording",
+      horizon: "mid",
+      mode: "direct",
+      evidence: profile.familyHits,
+    });
+    pushObservationSignal(signals, {
+      key: "work_context",
+      layer: "social_context",
+      score: clamp01(profile.workHits.length / 4),
+      source: "wording",
+      horizon: "mid",
+      mode: "direct",
+      evidence: profile.workHits,
+    });
+    pushObservationSignal(signals, {
+      key: "intimacy_context",
+      layer: "social_context",
+      score: clamp01(profile.intimacyHits.length / 4),
+      source: "wording",
+      horizon: "mid",
+      mode: "direct",
+      evidence: profile.intimacyHits,
+    });
+    pushObservationSignal(signals, {
+      key: "role_pressure",
+      layer: "social_context",
+      score: clamp01((profile.rolePressureHits.length + profile.externalDemandHits.length * 0.8) / 4),
+      source: "wording",
+      horizon: "short",
+      mode: "direct",
+      evidence: [...profile.rolePressureHits, ...profile.externalDemandHits].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "social_comparison",
+      layer: "social_context",
+      score: clamp01(profile.comparisonHits.length / 3),
+      source: "wording",
+      horizon: "short",
+      mode: "direct",
+      evidence: profile.comparisonHits,
+    });
+    pushObservationSignal(signals, {
+      key: "isolation_pull",
+      layer: "social_context",
+      score: clamp01((profile.isolationHits.length + (profile.socialOthersHits.length === 0 && profile.charCount > 0 ? 0.8 : 0)) / 3),
+      source: "wording",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: profile.isolationHits,
+    });
+    pushObservationSignal(signals, {
+      key: "entanglement_pressure",
+      layer: "social_context",
+      score: clamp01((profile.entanglementHits.length + (profile.socialOthersHits.length >= 3 ? 1 : 0)) / 3),
+      source: "wording",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [...profile.entanglementHits, ...profile.socialOthersHits].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "demand_vs_desire_gap",
+      layer: "social_context",
+      score: clamp01(demandVsDesireGap / 4),
+      source: "wording",
+      horizon: "short",
+      mode: "inferred",
+      evidence: [...profile.externalDemandHits, ...profile.internalDesireHits].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "identity_performance_pressure",
+      layer: "social_context",
+      score: clamp01(profile.identityPerformanceHits.length / 3),
+      source: "wording",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: profile.identityPerformanceHits,
+    });
+
+    return {
+      metrics: {
+        othersRefCount: profile.socialOthersHits.length,
+        familyCount: profile.familyHits.length,
+        workCount: profile.workHits.length,
+        intimacyCount: profile.intimacyHits.length,
+        desireCount: profile.internalDesireHits.length,
+        demandCount: profile.externalDemandHits.length + profile.rolePressureHits.length,
+      },
+      domains: {
+        family: profile.familyHits.length > 0,
+        work: profile.workHits.length > 0,
+        intimacy: profile.intimacyHits.length > 0,
+      },
+      signals,
+    };
+  },
+
+  buildTrajectoryLayer(context, languageForm, timeBehavior, socialContext, memory) {
+    const signals = [];
+    const recent = context.recentProfiles;
+    const older = context.olderProfiles.length ? context.olderProfiles : context.previousProfiles.slice(4, 8);
+    const recentLength = averageNumbers(recent.map((profile) => profile.charCount));
+    const olderLength = averageNumbers(older.map((profile) => profile.charCount));
+    const recentCoherence = averageNumbers(recent.map((profile) => profile.coherenceScore));
+    const olderCoherence = averageNumbers(older.map((profile) => profile.coherenceScore));
+    const recentAvoidance = averageNumbers(recent.map((profile) => profile.avoidanceHits.length + profile.minimizationHits.length * 0.5));
+    const olderAvoidance = averageNumbers(older.map((profile) => profile.avoidanceHits.length + profile.minimizationHits.length * 0.5));
+    const recentFriction = averageNumbers(recent.map((profile) => profile.friction));
+    const olderFriction = averageNumbers(older.map((profile) => profile.friction));
+    const recentTopics = recent.flatMap((profile) => profile.topics);
+    const topRecentTopic = findMostFrequent(recentTopics);
+    const loopCount = topRecentTopic ? recentTopics.filter((topic) => topic === topRecentTopic).length : 0;
+    const uniqueRecentTopics = uniqueValues(recentTopics);
+
+    const contractionScore = olderLength > 0 && recentLength < olderLength * 0.72
+      ? clamp01((olderLength - recentLength) / Math.max(olderLength, 1))
+      : 0;
+    const expansionScore = olderLength > 0 && recentLength > olderLength * 1.22
+      ? clamp01((recentLength - olderLength) / Math.max(recentLength, 1))
+      : 0;
+    const scatteringScore = clamp01(
+      (languageForm.metrics.fragmentRatio * 0.5)
+      + ((1 - languageForm.metrics.coherenceScore) * 0.5),
+    );
+    const releaseScore = clamp01(
+      ((olderAvoidance - recentAvoidance) * 0.18)
+      + ((recentCoherence - olderCoherence) * 0.8)
+      + ((olderFriction - recentFriction) * 0.06)
+      + (context.currentProfile.anchor === "澄明" ? 0.25 : 0),
+    );
+
+    pushObservationSignal(signals, {
+      key: "contraction",
+      layer: "trajectory",
+      score: contractionScore,
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [`recent:${recentLength.toFixed(1)}`, `older:${olderLength.toFixed(1)}`],
+    });
+    pushObservationSignal(signals, {
+      key: "expansion",
+      layer: "trajectory",
+      score: expansionScore,
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [`recent:${recentLength.toFixed(1)}`, `older:${olderLength.toFixed(1)}`],
+    });
+    pushObservationSignal(signals, {
+      key: "stabilization",
+      layer: "trajectory",
+      score: clamp01((recentCoherence - olderCoherence + 0.4) / 1.1),
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [`coherence:${recentCoherence.toFixed(2)}`],
+    });
+    pushObservationSignal(signals, {
+      key: "fluctuation",
+      layer: "trajectory",
+      score: clamp01((Math.sqrt(varianceNumbers(recent.map((profile) => profile.friction))) / 4) + timeBehavior.metrics.irregularity * 0.4),
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [`irregular:${timeBehavior.metrics.irregularity}`],
+    });
+    pushObservationSignal(signals, {
+      key: "looping",
+      layer: "trajectory",
+      score: clamp01(((loopCount - 1) / 4) + (memory.openLoops.length ? 0.24 : 0)),
+      source: "topic+memory",
+      horizon: "long",
+      mode: "inferred",
+      evidence: topRecentTopic ? [topRecentTopic] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "movement",
+      layer: "trajectory",
+      score: clamp01((releaseScore * 0.6) + (uniqueRecentTopics.length >= 4 ? 0.18 : 0)),
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: uniqueRecentTopics.slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "avoidance_bias",
+      layer: "trajectory",
+      score: clamp01((recentAvoidance - olderAvoidance + 1.2) / 3.2),
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: context.currentProfile.avoidanceHits,
+    });
+    pushObservationSignal(signals, {
+      key: "confrontation_shift",
+      layer: "trajectory",
+      score: clamp01((releaseScore * 0.7) + (context.currentProfile.concretenessHits.length / 5)),
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: context.currentProfile.concretenessHits,
+    });
+    pushObservationSignal(signals, {
+      key: "collapse_motion",
+      layer: "trajectory",
+      score: clamp01(
+        (scatteringScore * 0.55)
+        + ((recentFriction >= 10 ? 0.22 : 0))
+        + (context.currentProfile.anchor === "沉缩" ? 0.2 : 0),
+      ),
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [context.currentProfile.anchor, `friction:${recentFriction.toFixed(1)}`],
+    });
+    pushObservationSignal(signals, {
+      key: "recovery_motion",
+      layer: "trajectory",
+      score: releaseScore,
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [context.currentProfile.anchor, `coherence:${recentCoherence.toFixed(2)}`],
+    });
+    pushObservationSignal(signals, {
+      key: "compression",
+      layer: "trajectory",
+      score: clamp01((contractionScore * 0.55) + (recentFriction >= 8 ? 0.24 : 0) + (languageForm.metrics.coherenceScore >= 0.52 ? 0.12 : 0)),
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [`friction:${recentFriction.toFixed(1)}`],
+    });
+    pushObservationSignal(signals, {
+      key: "release",
+      layer: "trajectory",
+      score: releaseScore,
+      source: "cross_entry",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [context.currentProfile.anchor],
+    });
+
+    return {
+      axes: {
+        contractionVsExpansion: Number((expansionScore - contractionScore).toFixed(3)),
+        stabilizationVsFluctuation: Number((recentCoherence - Math.sqrt(varianceNumbers(recent.map((profile) => profile.coherenceScore)))).toFixed(3)),
+        loopingVsMovement: Number((((loopCount - 1) / 4) - releaseScore).toFixed(3)),
+        avoidanceVsConfrontation: Number((recentAvoidance - releaseScore).toFixed(3)),
+        collapseVsRecovery: Number((((signals.find((signal) => signal.key === "collapse_motion")?.score || 0) - releaseScore)).toFixed(3)),
+        coherenceVsScattering: Number((languageForm.metrics.coherenceScore - scatteringScore).toFixed(3)),
+        compressionVsRelease: Number(((signals.find((signal) => signal.key === "compression")?.score || 0) - releaseScore).toFixed(3)),
+      },
+      signals,
+    };
+  },
+
+  buildPsychologicalDynamicLayer(context, languageForm, timeBehavior, trajectory, socialContext, memory) {
+    const profile = context.currentProfile;
+    const signals = [];
+    const saidAvoidedScore = clamp01(
+      (languageForm.metrics.fragmentRatio * 0.22)
+      + (profile.avoidanceHits.length * 0.16)
+      + (profile.minimizationHits.length * 0.14)
+      + (profile.unfinishedTail ? 0.22 : 0)
+      + (profile.friction >= 8 ? 0.18 : 0),
+    );
+    const suppressionScore = clamp01(
+      (profile.suppressionHits.length * 0.22)
+      + (profile.minimizationHits.length * 0.16)
+      + (profile.emotion === "平静" && profile.friction >= 8 ? 0.24 : 0)
+      + (profile.charCount <= 24 && profile.friction >= 8 ? 0.16 : 0),
+    );
+    const ruminationScore = clamp01(
+      ((trajectory.signals.find((signal) => signal.key === "looping")?.score || 0) * 0.55)
+      + (memory.openLoops.length ? 0.24 : 0)
+      + (timeBehavior.signals.find((signal) => signal.key === "time_phase_return")?.score || 0) * 0.18,
+    );
+    const dissonanceScore = clamp01(
+      (languageForm.signals.find((signal) => signal.key === "contradiction_in_phrasing")?.score || 0) * 0.52
+      + (socialContext.signals.find((signal) => signal.key === "demand_vs_desire_gap")?.score || 0) * 0.34
+      + (containsAny(profile.text, ["知道", "明白", "清楚"]) && containsAny(profile.text, ["不想", "不敢", "拖"]) ? 0.24 : 0),
+    );
+    const rationalizationScore = clamp01(
+      (profile.defense === "合理化" ? 0.48 : 0)
+      + (profile.selfCorrectionHits.length * 0.1)
+      + (containsAny(profile.text, ["按理说", "其实", "我知道"]) ? 0.2 : 0),
+    );
+    const displacementScore = clamp01(
+      ((socialContext.metrics.workCount + socialContext.metrics.familyCount + socialContext.metrics.intimacyCount) > 0 ? 0.18 : 0)
+      + (profile.emotion === "平静" && profile.friction >= 8 ? 0.26 : 0)
+      + (languageForm.dominantFeatures.abstractionBias * 0.36),
+    );
+    const unfinishedConflictScore = clamp01(
+      (saidAvoidedScore * 0.44)
+      + (dissonanceScore * 0.34)
+      + (memory.openLoops.length ? 0.18 : 0),
+    );
+    const selfProtectionScore = clamp01(
+      (suppressionScore * 0.42)
+      + (profile.avoidanceHits.length ? 0.18 : 0)
+      + (profile.defense === "回避" ? 0.22 : 0),
+    );
+    const fragmentationScore = clamp01(
+      (languageForm.signals.find((signal) => signal.key === "fragmentation")?.score || 0) * 0.44
+      + (languageForm.signals.find((signal) => signal.key === "contradiction_in_phrasing")?.score || 0) * 0.26
+      + (trajectory.signals.find((signal) => signal.key === "collapse_motion")?.score || 0) * 0.22,
+    );
+    const integrationScore = clamp01(
+      (trajectory.signals.find((signal) => signal.key === "recovery_motion")?.score || 0) * 0.42
+      + (trajectory.signals.find((signal) => signal.key === "confrontation_shift")?.score || 0) * 0.22
+      + (profile.anchor === "澄明" ? 0.18 : 0)
+      + (languageForm.metrics.coherenceScore * 0.18),
+    );
+
+    pushObservationSignal(signals, {
+      key: "said_avoided_tension",
+      layer: "psychological_dynamic",
+      score: saidAvoidedScore,
+      source: "language+behavior",
+      horizon: "short",
+      mode: "inferred",
+      evidence: [...profile.avoidanceHits, ...profile.minimizationHits].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "suppression_holding_back",
+      layer: "psychological_dynamic",
+      score: suppressionScore,
+      source: "language+behavior",
+      horizon: "short",
+      mode: "inferred",
+      evidence: [...profile.suppressionHits, ...profile.minimizationHits].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "rumination_looping",
+      layer: "psychological_dynamic",
+      score: ruminationScore,
+      source: "memory+trajectory",
+      horizon: "long",
+      mode: "inferred",
+      evidence: memory.openLoops.slice(0, 2),
+    });
+    pushObservationSignal(signals, {
+      key: "cognitive_dissonance",
+      layer: "psychological_dynamic",
+      score: dissonanceScore,
+      source: "phrasing+social",
+      horizon: "short",
+      mode: "inferred",
+      evidence: profile.contradictionHits,
+    });
+    pushObservationSignal(signals, {
+      key: "defensive_rationalization",
+      layer: "psychological_dynamic",
+      score: rationalizationScore,
+      source: "phrasing",
+      horizon: "short",
+      mode: "inferred",
+      evidence: profile.selfCorrectionHits,
+    });
+    pushObservationSignal(signals, {
+      key: "emotional_displacement",
+      layer: "psychological_dynamic",
+      score: displacementScore,
+      source: "social+language",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [...profile.workHits, ...profile.familyHits, ...profile.intimacyHits].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "unfinished_internal_conflict",
+      layer: "psychological_dynamic",
+      score: unfinishedConflictScore,
+      source: "memory+language",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [...profile.contradictionHits, ...memory.openLoops].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "self_protection_pattern",
+      layer: "psychological_dynamic",
+      score: selfProtectionScore,
+      source: "language+behavior",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [profile.defense, ...profile.avoidanceHits].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "self_fragmentation",
+      layer: "psychological_dynamic",
+      score: fragmentationScore,
+      source: "trajectory+language",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [profile.anchor, ...profile.contradictionHits].slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "integration_attempt",
+      layer: "psychological_dynamic",
+      score: integrationScore,
+      source: "trajectory+language",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [profile.anchor, ...profile.concretenessHits].slice(0, 4),
+    });
+
+    return {
+      tensions: {
+        saidVsAvoided: Number(saidAvoidedScore.toFixed(3)),
+        suppression: Number(suppressionScore.toFixed(3)),
+        rumination: Number(ruminationScore.toFixed(3)),
+        dissonance: Number(dissonanceScore.toFixed(3)),
+      },
+      signals,
+    };
+  },
+
+  buildLongitudinalMemoryLayer(context, languageForm, timeBehavior, trajectory, socialContext, psychologicalDynamic, memory) {
+    const signals = [];
+    const previousProfiles = context.previousProfiles;
+    const allTopics = previousProfiles.flatMap((profile) => profile.topics);
+    const repeatedTheme = findMostFrequent(allTopics) || "";
+    const repeatedThemeCount = repeatedTheme ? allTopics.filter((topic) => topic === repeatedTheme).length : 0;
+    const previousClasses = previousProfiles.flatMap((profile) =>
+      (context.previousEntries.find((entry) => entry.id === profile.id)?.analysis?.observation?.classes || []).map((item) => item.key),
+    );
+    const recurringClass = findMostFrequent(previousClasses) || "";
+    const recurringClassCount = recurringClass ? previousClasses.filter((item) => item === recurringClass).length : 0;
+    const recentEmotions = previousProfiles.slice(0, 12).map((profile) => profile.emotion).filter(Boolean);
+    const emotionalClimate = findMostFrequent(recentEmotions) || "";
+    const identityPressureCount = previousProfiles.filter((profile) =>
+      profile.topics.includes("身份感") || profile.identityPerformanceHits.length > 0,
+    ).length;
+    const unresolvedReturnScore = clamp01(
+      ((repeatedThemeCount >= 3 ? repeatedThemeCount / 6 : 0) * 0.44)
+      + ((psychologicalDynamic.signals.find((signal) => signal.key === "rumination_looping")?.score || 0) * 0.26)
+      + ((memory.openLoops.length ? 0.24 : 0)),
+    );
+    const narrativeDriftScore = clamp01(
+      (uniqueValues(context.recentProfiles.flatMap((profile) => profile.topics)).length >= 4 ? 0.24 : 0)
+      + (recurringClassCount >= 3 && repeatedThemeCount <= 2 ? 0.34 : 0)
+      + ((trajectory.signals.find((signal) => signal.key === "movement")?.score || 0) * 0.16),
+    );
+
+    pushObservationSignal(signals, {
+      key: "repeated_unresolved_theme",
+      layer: "longitudinal_memory",
+      score: clamp01(repeatedThemeCount / 6),
+      source: "cross_entry",
+      horizon: "long",
+      mode: "inferred",
+      evidence: repeatedTheme ? [repeatedTheme, `count:${repeatedThemeCount}`] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "recurring_tension_structure",
+      layer: "longitudinal_memory",
+      score: clamp01(recurringClassCount / 6),
+      source: "cross_entry",
+      horizon: "long",
+      mode: "inferred",
+      evidence: recurringClass ? [recurringClass, `count:${recurringClassCount}`] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "emotional_climate",
+      layer: "longitudinal_memory",
+      score: emotionalClimate && emotionalClimate !== "平静" ? clamp01(recentEmotions.filter((emotion) => emotion === emotionalClimate).length / 6) : 0,
+      source: "cross_entry",
+      horizon: "long",
+      mode: "inferred",
+      evidence: emotionalClimate ? [emotionalClimate] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "behavioral_cycle",
+      layer: "longitudinal_memory",
+      score: timeBehavior.signals.find((signal) => signal.key === "recurrence_cycle")?.score || 0,
+      source: "timestamp",
+      horizon: "long",
+      mode: "inferred",
+      evidence: timeBehavior.signals.find((signal) => signal.key === "recurrence_cycle")?.evidence || [],
+    });
+    pushObservationSignal(signals, {
+      key: "narrative_drift",
+      layer: "longitudinal_memory",
+      score: narrativeDriftScore,
+      source: "cross_entry",
+      horizon: "long",
+      mode: "inferred",
+      evidence: uniqueValues(context.recentProfiles.flatMap((profile) => profile.topics)).slice(0, 4),
+    });
+    pushObservationSignal(signals, {
+      key: "identity_pattern",
+      layer: "longitudinal_memory",
+      score: clamp01(identityPressureCount / 6),
+      source: "cross_entry",
+      horizon: "long",
+      mode: "inferred",
+      evidence: identityPressureCount ? [`count:${identityPressureCount}`] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "unresolved_return",
+      layer: "longitudinal_memory",
+      score: unresolvedReturnScore,
+      source: "cross_entry",
+      horizon: "long",
+      mode: "inferred",
+      evidence: [...memory.openLoops, repeatedTheme].filter(Boolean).slice(0, 4),
+    });
+
+    return {
+      patterns: {
+        repeatedTheme,
+        recurringClass,
+        emotionalClimate,
+      },
+      signals,
+    };
+  },
+
+  buildInference(layers) {
+    const allSignals = Object.values(layers).flatMap((layer) => layer.signals || []);
+    const weakSignals = allSignals.filter((signal) => signal.strength === "weak").slice(0, 24);
+    const mediumSignals = allSignals.filter((signal) => signal.strength === "medium").slice(0, 24);
+    const strongSignals = allSignals.filter((signal) => signal.strength === "strong").slice(0, 24);
+    const familyScores = {
+      drift: averageNumbers([
+        layers.trajectory.signals.find((signal) => signal.key === "fluctuation")?.score || 0,
+        layers.trajectory.signals.find((signal) => signal.key === "avoidance_bias")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "emotional_displacement")?.score || 0,
+      ]),
+      looping: averageNumbers([
+        layers.trajectory.signals.find((signal) => signal.key === "looping")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "rumination_looping")?.score || 0,
+        layers.longitudinalMemory.signals.find((signal) => signal.key === "unresolved_return")?.score || 0,
+      ]),
+      suppression: averageNumbers([
+        layers.languageForm.signals.find((signal) => signal.key === "suppression_language")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "suppression_holding_back")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "self_protection_pattern")?.score || 0,
+      ]),
+      fragmentation: averageNumbers([
+        layers.languageForm.signals.find((signal) => signal.key === "fragmentation")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "self_fragmentation")?.score || 0,
+        layers.trajectory.signals.find((signal) => signal.key === "collapse_motion")?.score || 0,
+      ]),
+      rolePressure: averageNumbers([
+        layers.socialContext.signals.find((signal) => signal.key === "role_pressure")?.score || 0,
+        layers.socialContext.signals.find((signal) => signal.key === "demand_vs_desire_gap")?.score || 0,
+        layers.longitudinalMemory.signals.find((signal) => signal.key === "identity_pattern")?.score || 0,
+      ]),
+      contradiction: averageNumbers([
+        layers.languageForm.signals.find((signal) => signal.key === "contradiction_in_phrasing")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "cognitive_dissonance")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "unfinished_internal_conflict")?.score || 0,
+      ]),
+      unfinishedConflict: averageNumbers([
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "unfinished_internal_conflict")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "cognitive_dissonance")?.score || 0,
+        layers.languageForm.signals.find((signal) => signal.key === "unfinished_syntax")?.score || 0,
+      ]),
+      loosening: averageNumbers([
+        layers.trajectory.signals.find((signal) => signal.key === "recovery_motion")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "integration_attempt")?.score || 0,
+        layers.trajectory.signals.find((signal) => signal.key === "release")?.score || 0,
+      ]),
+      withdrawal: averageNumbers([
+        layers.socialContext.signals.find((signal) => signal.key === "isolation_pull")?.score || 0,
+        layers.trajectory.signals.find((signal) => signal.key === "contraction")?.score || 0,
+        layers.trajectory.signals.find((signal) => signal.key === "compression")?.score || 0,
+      ]),
+      compression: averageNumbers([
+        layers.trajectory.signals.find((signal) => signal.key === "compression")?.score || 0,
+        layers.psychologicalDynamic.signals.find((signal) => signal.key === "suppression_holding_back")?.score || 0,
+        layers.languageForm.signals.find((signal) => signal.key === "minimization_language")?.score || 0,
+      ]),
+    };
+
+    const convergingSignals = Object.entries(familyScores)
+      .filter(([, score]) => score >= 0.48)
+      .map(([key, score]) => ({
+        key,
+        score: Number(score.toFixed(3)),
+        strength: scoreBand(score),
+      }))
+      .sort((left, right) => right.score - left.score);
+
+    const strongPatterns = convergingSignals.filter((signal) => signal.score >= 0.72);
+    const topScore = convergingSignals[0]?.score || 0;
+
+    return {
+      weakSignals,
+      mediumSignals,
+      convergingSignals,
+      strongPatterns,
+      confidenceBand: Number(topScore.toFixed(3)),
+      silenceRecommended: topScore < 0.48 && mediumSignals.length < 3,
+    };
+  },
+
+  buildObservationClasses(layers, inference, context) {
+    const classes = [];
+    const addClass = (key, score, evidence = [], horizon = "mid") => {
+      if (score < 0.42) return;
+      classes.push({
+        key,
+        score: Number(score.toFixed(3)),
+        strength: scoreBand(score),
+        horizon,
+        evidence: evidence.filter(Boolean).slice(0, 4),
+      });
+    };
+
+    const familyScore = (key) => inference.convergingSignals.find((signal) => signal.key === key)?.score || 0;
+    addClass("drift", familyScore("drift"), ["fluctuation", "avoidance_bias"]);
+    addClass("looping", familyScore("looping"), ["looping", "rumination_looping"], "long");
+    addClass("suppression", familyScore("suppression"), ["suppression_language", "suppression_holding_back"]);
+    addClass("fragmentation", familyScore("fragmentation"), ["fragmentation", "self_fragmentation"]);
+    addClass("over_control", averageNumbers([
+      layers.socialContext.signals.find((signal) => signal.key === "role_pressure")?.score || 0,
+      layers.psychologicalDynamic.signals.find((signal) => signal.key === "defensive_rationalization")?.score || 0,
+    ]), ["role_pressure", "defensive_rationalization"]);
+    addClass("collapse_risk", averageNumbers([
+      layers.trajectory.signals.find((signal) => signal.key === "collapse_motion")?.score || 0,
+      layers.timeBehavior.signals.find((signal) => signal.key === "silence_gap")?.score || 0,
+    ]), ["collapse_motion", "silence_gap"]);
+    addClass("avoidance", averageNumbers([
+      layers.languageForm.signals.find((signal) => signal.key === "avoidance_language")?.score || 0,
+      layers.psychologicalDynamic.signals.find((signal) => signal.key === "self_protection_pattern")?.score || 0,
+    ]), ["avoidance_language", "self_protection_pattern"]);
+    addClass("emotional_compression", familyScore("compression"), ["compression", "quiet_weight"]);
+    addClass("identity_strain", averageNumbers([
+      layers.socialContext.signals.find((signal) => signal.key === "identity_performance_pressure")?.score || 0,
+      layers.longitudinalMemory.signals.find((signal) => signal.key === "identity_pattern")?.score || 0,
+    ]), ["identity_performance_pressure", "identity_pattern"], "long");
+    addClass("role_pressure", familyScore("rolePressure"), ["role_pressure", "demand_vs_desire_gap"]);
+    addClass("unresolved_return", averageNumbers([
+      layers.longitudinalMemory.signals.find((signal) => signal.key === "unresolved_return")?.score || 0,
+      layers.trajectory.signals.find((signal) => signal.key === "looping")?.score || 0,
+    ]), ["unresolved_return", "looping"], "long");
+    addClass("unfinished_meaning", averageNumbers([
+      layers.psychologicalDynamic.signals.find((signal) => signal.key === "unfinished_internal_conflict")?.score || 0,
+      layers.languageForm.signals.find((signal) => signal.key === "unfinished_syntax")?.score || 0,
+    ]), ["unfinished_internal_conflict", "unfinished_syntax"]);
+    addClass("withdrawal", familyScore("withdrawal"), ["contraction", "isolation_pull"]);
+    addClass("self_contradiction", layers.psychologicalDynamic.signals.find((signal) => signal.key === "cognitive_dissonance")?.score || 0, ["cognitive_dissonance"]);
+    addClass("tension_accumulation", averageNumbers([
+      layers.psychologicalDynamic.signals.find((signal) => signal.key === "unfinished_internal_conflict")?.score || 0,
+      layers.longitudinalMemory.signals.find((signal) => signal.key === "repeated_unresolved_theme")?.score || 0,
+    ]), ["unfinished_internal_conflict", "repeated_unresolved_theme"], "long");
+    addClass("temporary_stabilization", averageNumbers([
+      layers.trajectory.signals.find((signal) => signal.key === "stabilization")?.score || 0,
+      layers.trajectory.signals.find((signal) => signal.key === "recovery_motion")?.score || 0,
+    ]), ["stabilization", "recovery_motion"]);
+    addClass("pre_start_loop", averageNumbers([
+      layers.psychologicalDynamic.signals.find((signal) => signal.key === "rumination_looping")?.score || 0,
+      layers.longitudinalMemory.signals.find((signal) => signal.key === "unresolved_return")?.score || 0,
+      context.currentProfile && containsAny(context.currentProfile.text, ["开始", "准备", "打开"]) ? 0.24 : 0,
+    ]), ["rumination_looping", "unresolved_return"]);
+    addClass("private_public_split", averageNumbers([
+      layers.socialContext.signals.find((signal) => signal.key === "identity_performance_pressure")?.score || 0,
+      layers.psychologicalDynamic.signals.find((signal) => signal.key === "suppression_holding_back")?.score || 0,
+    ]), ["identity_performance_pressure", "suppression_holding_back"]);
+    addClass("displaced_pressure", layers.psychologicalDynamic.signals.find((signal) => signal.key === "emotional_displacement")?.score || 0, ["emotional_displacement"]);
+    addClass("fragile_loosening", familyScore("loosening"), ["recovery_motion", "integration_attempt"]);
+    addClass("held_back_core", averageNumbers([
+      layers.psychologicalDynamic.signals.find((signal) => signal.key === "said_avoided_tension")?.score || 0,
+      layers.psychologicalDynamic.signals.find((signal) => signal.key === "suppression_holding_back")?.score || 0,
+    ]), ["said_avoided_tension", "suppression_holding_back"]);
+    addClass("night_return", averageNumbers([
+      layers.timeBehavior.signals.find((signal) => signal.key === "time_phase_return")?.score || 0,
+      context.currentProfile.timePhase === "深夜" ? 0.3 : 0,
+    ]), ["time_phase_return"], "long");
+    addClass("silence_after_activation", averageNumbers([
+      layers.timeBehavior.signals.find((signal) => signal.key === "silence_gap")?.score || 0,
+      layers.timeBehavior.signals.find((signal) => signal.key === "sudden_stop")?.score || 0,
+    ]), ["silence_gap", "sudden_stop"]);
+    addClass("burst_release", averageNumbers([
+      layers.timeBehavior.signals.find((signal) => signal.key === "burst_writing")?.score || 0,
+      layers.trajectory.signals.find((signal) => signal.key === "release")?.score || 0,
+    ]), ["burst_writing", "release"]);
+    addClass("relational_ambivalence", averageNumbers([
+      layers.socialContext.signals.find((signal) => signal.key === "intimacy_context")?.score || 0,
+      layers.socialContext.signals.find((signal) => signal.key === "entanglement_pressure")?.score || 0,
+      layers.psychologicalDynamic.signals.find((signal) => signal.key === "cognitive_dissonance")?.score || 0,
+    ]), ["intimacy_context", "entanglement_pressure", "cognitive_dissonance"]);
+    addClass("integration_attempt", layers.psychologicalDynamic.signals.find((signal) => signal.key === "integration_attempt")?.score || 0, ["integration_attempt"]);
+    addClass("recovery_direction", averageNumbers([
+      layers.trajectory.signals.find((signal) => signal.key === "recovery_motion")?.score || 0,
+      layers.trajectory.signals.find((signal) => signal.key === "movement")?.score || 0,
+    ]), ["recovery_motion", "movement"]);
+    addClass("identity_performance_pressure", averageNumbers([
+      layers.socialContext.signals.find((signal) => signal.key === "identity_performance_pressure")?.score || 0,
+      layers.socialContext.signals.find((signal) => signal.key === "role_pressure")?.score || 0,
+    ]), ["identity_performance_pressure", "role_pressure"], "long");
+    addClass("coherence_forming", averageNumbers([
+      layers.trajectory.signals.find((signal) => signal.key === "recovery_motion")?.score || 0,
+      layers.languageForm.metrics.coherenceScore,
+    ]), ["recovery_motion", "coherenceScore"]);
+    addClass("coherence_breaking", averageNumbers([
+      layers.trajectory.signals.find((signal) => signal.key === "collapse_motion")?.score || 0,
+      1 - layers.languageForm.metrics.coherenceScore,
+    ]), ["collapse_motion", "fragmentation"]);
+    addClass("narrative_drift", layers.longitudinalMemory.signals.find((signal) => signal.key === "narrative_drift")?.score || 0, ["narrative_drift"], "long");
+    addClass("recurring_social_pressure", averageNumbers([
+      layers.socialContext.signals.find((signal) => signal.key === "role_pressure")?.score || 0,
+      layers.longitudinalMemory.signals.find((signal) => signal.key === "identity_pattern")?.score || 0,
+    ]), ["role_pressure", "identity_pattern"], "long");
+
+    return classes.sort((left, right) => right.score - left.score);
+  },
+
+  buildOutputReadiness(layers, inference, classes) {
+    const primary = classes[0] || null;
+    const secondary = classes[1] || null;
+    const mode = inference.silenceRecommended
+      ? "silent"
+      : (primary?.score || 0) >= 0.76
+        ? "sharp"
+        : "soft";
+
+    return {
+      echo: {
+        mode,
+        primaryClass: primary?.key || "",
+        secondaryClass: secondary?.key || "",
+        shouldSpeak: !inference.silenceRecommended,
+        uncertainty: Number((1 - inference.confidenceBand).toFixed(3)),
+        familyBias: primary?.key || "",
+        toneBias: mode === "sharp" ? "direct" : (primary?.key === "looping" || primary?.key === "unresolved_return" ? "residue" : "soft"),
+      },
+      continuity: {
+        carryForward: Boolean(primary && ["unresolved_return", "pre_start_loop", "tension_accumulation", "identity_strain", "role_pressure"].includes(primary.key)),
+        threadClass: primary?.key || "",
+        persistence: primary?.horizon || "short",
+      },
+      history: {
+        narrativeAnchor: primary?.key || "",
+        structureWeight: layers.longitudinalMemory.patterns.repeatedTheme || primary?.key || "",
+        recordEmphasis: secondary?.key || primary?.key || "",
+      },
+      resurfacing: {
+        eligible: Boolean(primary && primary.horizon === "long" && primary.score >= 0.68),
+        classKey: primary?.key || "",
+        classScore: primary?.score || 0,
+        quietWeight: primary?.score ? Number(Math.max(primary.score - 0.12, 0).toFixed(3)) : 0,
+      },
+    };
+  },
+};
+
 const AIEngine = {
-  createPromptEnvelope(currentEntry, memoryContext) {
+  createPromptEnvelope(currentEntry, memoryContext, observation) {
     return {
       system_prompt: SYSTEM_PROMPT_V1,
       current_entry: currentEntry.content,
@@ -719,59 +2367,87 @@ const AIEngine = {
       active_patterns: memoryContext.activePatterns,
       open_loops: memoryContext.openLoops,
       signals: currentEntry.context,
+      observation_glimpse: {
+        primary_class: observation?.outputReadiness?.echo?.primaryClass || "",
+        secondary_class: observation?.outputReadiness?.echo?.secondaryClass || "",
+        continuity_thread: observation?.outputReadiness?.continuity?.threadClass || "",
+      },
     };
   },
 
   analyze(currentEntry, entries) {
     const memory = MemoryEngine.build(entries, currentEntry);
-    const promptEnvelope = this.createPromptEnvelope(currentEntry, memory);
-    const interpretation = this.interpret(currentEntry, memory);
-    const response = this.composeResponse(interpretation, memory);
+    const observation = ObservationEngine.observe(currentEntry, entries, memory);
+    const promptEnvelope = this.createPromptEnvelope(currentEntry, memory, observation);
+    const interpretation = this.interpret(currentEntry, memory, observation);
+    const response = this.composeResponse(interpretation, memory, currentEntry);
 
     return {
       promptEnvelope,
       memory,
+      observation,
       interpretation,
       response,
       analyzedAt: new Date().toISOString(),
     };
   },
 
-  interpret(entry, memory) {
+  interpret(entry, memory, observation) {
     const text = (entry.content || "").trim();
-    const surfaceEmotion = inferSurfaceEmotion(text, entry);
-    const topicEntities = inferTopics(text, entry);
-    const defenseSignal = inferDefenseSignal(text, entry);
-    const coreTension = inferCoreTension(text, entry, memory);
-    const patternLink = inferPatternLink(topicEntities, surfaceEmotion, memory);
-    const confidence = inferConfidence(entry, surfaceEmotion, coreTension, patternLink);
-    const shouldEcho = confidence >= 0.36 || Boolean(patternLink) || Boolean(coreTension);
-
-    return {
+    const surfaceEmotion = observation?.layers?.languageForm?.dominantFeatures?.surfaceEmotion || inferSurfaceEmotion(text, entry);
+    const topicEntities = uniqueValues([
+      ...inferTopics(text, entry),
+      ...(observation?.layers?.longitudinalMemory?.patterns?.repeatedTheme ? [observation.layers.longitudinalMemory.patterns.repeatedTheme] : []),
+    ]).slice(0, 3);
+    const defenseSignal = inferDefenseSignal(text, entry, observation);
+    const coreTension = inferCoreTension(text, entry, memory, observation);
+    const patternLink = inferPatternLink(topicEntities, surfaceEmotion, memory, observation);
+    const confidence = inferConfidence(entry, surfaceEmotion, coreTension, patternLink, observation);
+    const baseInterpretation = {
       surface_emotion: surfaceEmotion,
-      core_tension: coreTension,
       defense_signal: defenseSignal,
       topic_entities: topicEntities,
+      core_tension: coreTension,
       pattern_link: patternLink,
       confidence,
+      observation_primary_class: observation?.outputReadiness?.echo?.primaryClass || "",
+      observation_secondary_class: observation?.outputReadiness?.echo?.secondaryClass || "",
+      observation_classes: observation?.classes?.slice(0, 6).map((item) => item.key) || [],
+      observation_confidence: observation?.inference?.confidenceBand || 0,
+    };
+    const shouldEcho =
+      observation?.outputReadiness?.echo?.mode !== "silent"
+      || confidence >= 0.36
+      || Boolean(patternLink)
+      || Boolean(coreTension);
+    const echoFamily = deriveEchoFamily(entry, baseInterpretation, memory);
+    const echoTone = deriveEchoTone(entry, baseInterpretation, echoFamily);
+
+    return {
+      ...baseInterpretation,
       should_echo: shouldEcho,
+      echo_family: echoFamily,
+      echo_tone: echoTone,
     };
   },
 
-  composeResponse(interpretation, memory) {
+  composeResponse(interpretation, memory, entry) {
     if (!interpretation.should_echo) {
       return {
-        echo: buildFallbackEcho(interpretation, memory),
+        echo: buildFallbackEcho(interpretation, memory, entry),
         question: "",
         pattern_hint: "",
       };
     }
 
-    const echo = buildAnalysisEcho(interpretation, memory);
-    const question = buildAnalysisQuestion(interpretation, memory);
-    const patternHint = interpretation.pattern_link && interpretation.confidence >= 0.58
-      ? interpretation.pattern_link
+    const echo = buildAnalysisEcho(interpretation, memory, entry);
+    const question = shouldAskEchoQuestion(entry, interpretation, memory)
+      ? buildAnalysisQuestion(interpretation, memory)
       : "";
+    const patternHint =
+      !question && interpretation.pattern_link && interpretation.confidence >= 0.66
+        ? buildPatternHint(interpretation, memory, entry, echo)
+        : "";
 
     return {
       echo,
@@ -781,20 +2457,299 @@ const AIEngine = {
   },
 };
 
-function buildFallbackEcho(interpretation, memory) {
-  if (interpretation.topic_entities[0]) {
-    return `你刚刚留下的，靠近「${interpretation.topic_entities[0]}」。`;
+function buildFallbackEcho(interpretation, memory, entry) {
+  const family = interpretation.pattern_link
+    ? "circling"
+    : interpretation.surface_emotion && interpretation.surface_emotion !== "平静"
+      ? "quiet_weight"
+      : "trace";
+
+  return generateEchoSentence(entry, interpretation, memory, {
+    family,
+    tone: family === "trace" ? "soft" : "residue",
+  });
+}
+
+function normalizeEchoWhitespace(text) {
+  return (text || "").replace(/\s+/g, " ").trim();
+}
+
+function fingerprintEchoText(text) {
+  return normalizeEchoWhitespace(text)
+    .replace(/[「」『』【】〔〕（）()，。！？!?,、:：;；….\-\s]/g, "")
+    .replace(/最近|这次|这里|那个|一下|已经|还是|有点|总会|正在|一直/g, "");
+}
+
+function isDeadGenericEchoText(text) {
+  const normalized = normalizeEchoWhitespace(text);
+  return DEAD_GENERIC_ECHO_LINES.some((line) => normalizeEchoWhitespace(line) === normalized);
+}
+
+function isDeadGenericEchoPayload(payload) {
+  if (!payload) return false;
+  return [payload.l1, payload.l2, payload.l3].filter(Boolean).some((text) => isDeadGenericEchoText(text));
+}
+
+function collectRecentEchoFingerprints(entries = [], excludeId = null, limit = 14) {
+  const fingerprints = [];
+  const pool = entries.filter((entry) => entry?.id !== excludeId).slice(0, limit);
+
+  pool.forEach((entry) => {
+    const texts = [
+      entry.analysis?.response?.echo,
+      entry.analysis?.response?.pattern_hint,
+      entry.system?.echo?.l1,
+      entry.system?.echo?.l2,
+      entry.system?.echo?.l3,
+    ].filter(Boolean);
+
+    texts.forEach((text) => {
+      const fingerprint = fingerprintEchoText(text);
+      if (fingerprint) fingerprints.push(fingerprint);
+    });
+  });
+
+  return fingerprints;
+}
+
+function echoTooSimilar(text, recentFingerprints) {
+  const fingerprint = fingerprintEchoText(text);
+  if (!fingerprint) return false;
+
+  return recentFingerprints.some((recent) => {
+    if (!recent) return false;
+    if (fingerprint.length < 8 || recent.length < 8) {
+      return fingerprint === recent;
+    }
+    return fingerprint === recent || fingerprint.includes(recent) || recent.includes(fingerprint);
+  });
+}
+
+function toTimePhrase(timePhase) {
+  if (timePhase === "深夜") return "深夜";
+  if (timePhase === "清晨") return "清晨";
+  return "这个时段";
+}
+
+function createEchoContext(entry, interpretation = {}, memory = {}, overrides = {}) {
+  const topic = overrides.topic || interpretation.topic_entities?.[0] || entry.tags?.keywords?.[0] || "";
+  const emotion = overrides.emotion || interpretation.surface_emotion || entry.tags?.emotion || "";
+  const anchor = overrides.anchor || entry.metadata?.anchor || "";
+  const timePhrase = overrides.timePhrase || toTimePhrase(overrides.timePhase || entry.context?.timePhase);
+  const seedSource =
+    overrides.seedSource
+    || `${entry.id || entry.timestamp || Date.now()}-${topic}-${emotion}-${anchor}-${interpretation.core_tension || ""}`;
+
+  return {
+    entry,
+    interpretation,
+    memory,
+    topic,
+    emotion,
+    anchor,
+    topicSpot: topic ? `「${topic}」` : "这里",
+    topicMatter: topic ? `「${topic}」这件事` : "这件事",
+    emotionPhrase: emotion && emotion !== "平静" ? `「${emotion}」` : "这种感觉",
+    timePhrase,
+    seed: hashCode(seedSource),
+  };
+}
+
+function deriveEchoFamily(entry, interpretation, memory) {
+  const text = entry.content || "";
+  const primaryClass = interpretation.observation_primary_class || interpretation.observation_classes?.[0] || "";
+
+  if (primaryClass === "pre_start_loop") {
+    return "pre_start";
+  }
+
+  if (["held_back_core", "unfinished_meaning"].includes(primaryClass)) {
+    return entry.context?.friction >= 10 ? "almost_said" : "held_back";
+  }
+
+  if (["unresolved_return", "looping"].includes(primaryClass)) {
+    return interpretation.core_tension ? "stalled_return" : "circling";
+  }
+
+  if (primaryClass === "drift") {
+    return "drift";
+  }
+
+  if (["withdrawal", "emotional_compression"].includes(primaryClass)) {
+    return "inward_pull";
+  }
+
+  if (["fragile_loosening", "recovery_direction", "integration_attempt", "temporary_stabilization"].includes(primaryClass)) {
+    return "loosening";
+  }
+
+  if (["identity_strain", "role_pressure", "identity_performance_pressure", "recurring_social_pressure"].includes(primaryClass)) {
+    return "quiet_weight";
+  }
+
+  if (
+    memory.openLoops.length > 0 &&
+    containsAny(text, ["开始", "明天", "这次", "还是", "准备", "先"])
+  ) {
+    return "pre_start";
+  }
+
+  if (entry.context?.friction >= 11 && entry.context?.durationSec >= 90) {
+    return "almost_said";
+  }
+
+  if (interpretation.defense_signal === "回避") {
+    return "held_back";
+  }
+
+  if (interpretation.pattern_link && interpretation.core_tension) {
+    return "stalled_return";
+  }
+
+  if (interpretation.pattern_link) {
+    return "circling";
+  }
+
+  if (entry.metadata?.anchor === "游离") {
+    return "drift";
+  }
+
+  if (entry.metadata?.anchor === "沉缩") {
+    return "inward_pull";
+  }
+
+  if (entry.metadata?.anchor === "澄明") {
+    return "loosening";
   }
 
   if (interpretation.surface_emotion && interpretation.surface_emotion !== "平静") {
-    return `这段话里，隐约带着一点「${interpretation.surface_emotion}」。`;
+    return "quiet_weight";
   }
 
-  if (memory.openLoops[0]) {
-    return memory.openLoops[0];
+  if (memory.longIdentityMemory[0]) {
+    return "circling";
   }
 
-  return "你刚刚留下了一段此刻。";
+  return "trace";
+}
+
+function deriveEchoTone(entry, interpretation, family) {
+  const primaryClass = interpretation.observation_primary_class || interpretation.observation_classes?.[0] || "";
+
+  if (["held_back_core", "unfinished_meaning", "self_contradiction"].includes(primaryClass)) {
+    return "direct";
+  }
+  if (["unresolved_return", "looping", "night_return"].includes(primaryClass)) {
+    return "residue";
+  }
+  if (["fragile_loosening", "recovery_direction", "integration_attempt"].includes(primaryClass)) {
+    return "movement";
+  }
+  if (["withdrawal", "emotional_compression", "silence_after_activation"].includes(primaryClass)) {
+    return "residue";
+  }
+
+  if (family === "pre_start") return "movement";
+  if (family === "held_back") return entry.context?.friction >= 10 ? "direct" : "movement";
+  if (family === "almost_said") return "movement";
+  if (family === "circling") return interpretation.confidence >= 0.58 ? "movement" : "soft";
+  if (family === "stalled_return") return "residue";
+  if (family === "drift") return "soft";
+  if (family === "inward_pull") return "residue";
+  if (family === "loosening") return "movement";
+  if (family === "quiet_weight") return "residue";
+  if (family === "time_return") return "soft";
+  return "soft";
+}
+
+function buildEchoCandidates(family, preferredTone, context) {
+  const familyLibrary = ECHO_LANGUAGE_LIBRARY[family] || ECHO_LANGUAGE_LIBRARY.trace;
+  const tones = ECHO_TONE_SEQUENCE[preferredTone] || ECHO_TONE_SEQUENCE.soft;
+  const candidates = [];
+
+  tones.forEach((tone) => {
+    const templates = familyLibrary[tone] || [];
+    templates.forEach((template) => {
+      const text = normalizeEchoWhitespace(typeof template === "function" ? template(context) : template);
+      if (!text || isDeadGenericEchoText(text)) return;
+      candidates.push({ text, tone, family });
+    });
+  });
+
+  return candidates;
+}
+
+function chooseEchoCandidate(candidates, context, recentFingerprints) {
+  if (!candidates.length) return "";
+
+  const startIndex = context.seed % candidates.length;
+  for (let offset = 0; offset < candidates.length; offset += 1) {
+    const candidate = candidates[(startIndex + offset) % candidates.length];
+    if (!echoTooSimilar(candidate.text, recentFingerprints)) {
+      return candidate.text;
+    }
+  }
+
+  return candidates[startIndex].text;
+}
+
+function generateEchoSentence(entry, interpretation, memory, overrides = {}) {
+  const context = createEchoContext(entry, interpretation, memory, overrides);
+  const family = overrides.family || deriveEchoFamily(entry, interpretation, memory);
+  const tone = overrides.tone || deriveEchoTone(entry, interpretation, family);
+  const recentFingerprints =
+    overrides.recentFingerprints || collectRecentEchoFingerprints(overrides.entries || state.entries, entry.id);
+  const candidates = buildEchoCandidates(family, tone, context);
+  return chooseEchoCandidate(candidates, context, recentFingerprints)
+    || chooseEchoCandidate(buildEchoCandidates("trace", "soft", context), context, recentFingerprints)
+    || "这里还没有完全落下。";
+}
+
+function buildPatternHint(interpretation, memory, entry, leadEcho = "") {
+  if (!interpretation.pattern_link) return "";
+
+  const family = interpretation.echo_family === "circling" ? "stalled_return" : "circling";
+  const recentFingerprints = collectRecentEchoFingerprints(state.entries, entry.id);
+  if (leadEcho) recentFingerprints.push(fingerprintEchoText(leadEcho));
+  return generateEchoSentence(entry, interpretation, memory, {
+    family,
+    tone: "residue",
+    recentFingerprints,
+  });
+}
+
+function collectRecentQuestionFingerprints(entries = [], excludeId = null, limit = 5) {
+  return entries
+    .filter((entry) => entry?.id !== excludeId)
+    .slice(0, limit)
+    .map((entry) => fingerprintEchoText(entry.analysis?.response?.question || ""))
+    .filter(Boolean);
+}
+
+function shouldAskEchoQuestion(entry, interpretation, memory) {
+  if (interpretation.confidence < 0.72) return false;
+  if (["trace", "loosening", "circling", "quiet_weight", "time_return"].includes(interpretation.echo_family)) {
+    return false;
+  }
+  if (
+    interpretation.defense_signal === "直接表达"
+    && !memory.openLoops.length
+    && (entry.context?.friction || 0) < 8
+  ) {
+    return false;
+  }
+
+  if (collectRecentQuestionFingerprints(state.entries, entry.id).length >= 2) {
+    return false;
+  }
+
+  return Boolean(
+    interpretation.core_tension
+      || interpretation.defense_signal === "回避"
+      || interpretation.defense_signal === "压抑"
+      || memory.openLoops.length
+      || interpretation.topic_entities.length,
+  );
 }
 
 const MemoryEngine = {
@@ -904,15 +2859,44 @@ async function startTraceRuntime() {
 }
 
 function updateHomepageState(hasEntries) {
-  if (elements.thresholdLine) {
-    elements.thresholdLine.textContent = hasEntries
-      ? "It’s still here."
-      : "Not everything needs to be said.";
+  state.isFirstTimeUser = !hasEntries;
+  state.onboardingStep = 0;
+  renderThresholdState({ immediate: true });
+}
+
+function getThresholdState() {
+  if (!state.isFirstTimeUser) {
+    return RETURNING_THRESHOLD_STATE;
   }
 
-  if (elements.enterWritingBtn) {
-    elements.enterWritingBtn.textContent = hasEntries ? "Continue" : "Begin";
+  return FIRST_TIME_ONBOARDING_STEPS[state.onboardingStep] || FIRST_TIME_ONBOARDING_STEPS[0];
+}
+
+function renderThresholdState({ immediate = false } = {}) {
+  const thresholdState = getThresholdState();
+  if (!elements.thresholdLine || !elements.enterWritingBtn) return;
+
+  if (immediate || !elements.thresholdShell) {
+    state.onboardingTransitioning = false;
+    elements.thresholdLine.textContent = thresholdState.line;
+    elements.enterWritingBtn.textContent = thresholdState.action;
+    return;
   }
+
+  state.onboardingTransitioning = true;
+  elements.thresholdShell.classList.add("is-stepping");
+
+  const swapPoint = Math.round(MOTION.onboardingSwapMs * 0.42);
+  window.setTimeout(() => {
+    elements.thresholdLine.textContent = thresholdState.line;
+    elements.enterWritingBtn.textContent = thresholdState.action;
+    window.requestAnimationFrame(() => {
+      elements.thresholdShell.classList.remove("is-stepping");
+      window.setTimeout(() => {
+        state.onboardingTransitioning = false;
+      }, MOTION.onboardingSwapMs);
+    });
+  }, swapPoint);
 }
 
 function resetLegacyBioState() {
@@ -1280,6 +3264,12 @@ function bindEvents() {
 
   if (elements.enterWritingBtn) {
     elements.enterWritingBtn.addEventListener("click", () => {
+      if (state.onboardingTransitioning) return;
+      if (state.isFirstTimeUser && state.onboardingStep < FIRST_TIME_ONBOARDING_STEPS.length - 1) {
+        state.onboardingStep += 1;
+        renderThresholdState();
+        return;
+      }
       showView("compose");
       elements.rawMemoryInput.focus();
     });
@@ -1598,9 +3588,22 @@ function buildEntryEchoCard(entry) {
   }
 
   if (entry.content) {
+    const interpretation = entry.analysis?.interpretation || {
+      surface_emotion: detectEmotion(entry.content || "", entry),
+      topic_entities: inferTopics(entry.content || "", entry),
+      defense_signal: inferDefenseSignal(entry.content || "", entry),
+      core_tension: "",
+      pattern_link: "",
+      confidence: 0.22,
+      echo_family: "trace",
+      echo_tone: "soft",
+    };
     return {
-      l1: "你刚刚留下了一段话。",
-      l2: "它已经被收进这次记录里。",
+      l1: generateEchoSentence(entry, interpretation, { openLoops: [], activePatterns: [], longIdentityMemory: [] }, {
+        family: interpretation.echo_family || "trace",
+        tone: interpretation.echo_tone || "soft",
+      }),
+      l2: "",
       l3: entry.system?.flashback || "",
       level: 1,
     };
@@ -1680,7 +3683,7 @@ function scheduleEcho(entry, allEntries) {
   chain.lastTimestamp = Date.now();
 
   const level = Math.min(chain.count, 3);
-  const text = buildScheduledEcho(top, level);
+  const text = buildScheduledEcho(top, level, entry, recent);
   const textHash = JSON.stringify(text);
 
   if (state.lastEchoText === textHash) return null;
@@ -1704,81 +3707,69 @@ function scheduleEcho(entry, allEntries) {
   };
 }
 
-function buildScheduledEcho(pattern, level) {
-  const { type } = pattern;
+function buildScheduledEcho(pattern, level, entry, recentEntries = []) {
+  const familyMap = {
+    repeat: level >= 2 ? "stalled_return" : "circling",
+    time: "time_return",
+    friction: level >= 2 ? "almost_said" : "held_back",
+    open_loop: "pre_start",
+  };
+  const toneMap = {
+    repeat: level >= 2 ? "movement" : "soft",
+    time: "soft",
+    friction: level >= 2 ? "direct" : "movement",
+    open_loop: "movement",
+  };
 
-  if (type === "repeat") {
-    if (level === 1) {
-      return {
-        l1: "某个内容再次出现。",
-        l2: "",
-        l3: "",
-        level,
-      };
-    }
-    if (level === 2) {
-      return {
-        l1: "某个内容再次出现。",
-        l2: "它在不同时间重复出现。",
-        l3: "",
-        level,
-      };
-    }
-    return {
-      l1: "某个内容再次出现。",
-      l2: "它在不同时间重复出现。",
-      l3: "但没有继续展开。",
-      level,
-    };
-  }
+  const interpretation = {
+    surface_emotion: entry.tags?.emotion || detectEmotion(entry.content || "", entry),
+    topic_entities: pattern.key ? [pattern.key] : inferTopics(entry.content || "", entry),
+    defense_signal: inferDefenseSignal(entry.content || "", entry),
+    core_tension: "",
+    pattern_link: pattern.type === "repeat" || pattern.type === "open_loop" ? "linked" : "",
+    confidence: 0.72,
+    echo_family: familyMap[pattern.type] || "trace",
+    echo_tone: toneMap[pattern.type] || "soft",
+  };
+  const memory = {
+    openLoops: pattern.type === "open_loop" ? ["open_loop"] : [],
+    activePatterns: [],
+    longIdentityMemory: [],
+  };
+  const context = createEchoContext(entry, interpretation, memory, {
+    topic: pattern.key || interpretation.topic_entities[0] || "",
+    timePhase: pattern.key || entry.context?.timePhase,
+    seedSource: `${entry.id}-${pattern.type}-${level}-${pattern.key || ""}`,
+  });
+  const recentFingerprints = collectRecentEchoFingerprints(recentEntries, entry.id);
+  const l1 = generateEchoSentence(entry, interpretation, memory, {
+    family: interpretation.echo_family,
+    tone: interpretation.echo_tone,
+    recentFingerprints,
+    topic: pattern.key || "",
+    timePhase: pattern.key || entry.context?.timePhase,
+    seedSource: `${entry.id}-${pattern.type}-${level}-l1`,
+  });
 
-  if (type === "time") {
-    return {
-      l1: "一些内容总是在相似的时段出现。",
-      l2: "",
-      l3: "",
-      level,
-    };
-  }
-
-  if (type === "friction") {
-    if (level === 1) {
-      return {
-        l1: "这段记录有一些停顿。",
-        l2: "",
-        l3: "",
-        level,
-      };
+  const companions = SCHEDULED_ECHO_COMPANIONS[pattern.type] || {};
+  const pickCompanion = (lineKey) => {
+    const templates = companions[lineKey] || [];
+    if (!templates.length) return "";
+    const startIndex = context.seed % templates.length;
+    for (let offset = 0; offset < templates.length; offset += 1) {
+      const template = templates[(startIndex + offset) % templates.length];
+      const text = normalizeEchoWhitespace(typeof template === "function" ? template(context) : template);
+      if (!text || isDeadGenericEchoText(text) || echoTooSimilar(text, recentFingerprints)) continue;
+      return text;
     }
-    if (level === 2) {
-      return {
-        l1: "这段记录存在停顿。",
-        l2: "你在反复修改。",
-        l3: "",
-        level,
-      };
-    }
-    return {
-      l1: "这段记录存在停顿。",
-      l2: "你在反复修改。",
-      l3: "某个点没有被写出来。",
-      level,
-    };
-  }
-
-  if (type === "open_loop") {
-    return {
-      l1: "有一个内容持续被提到。",
-      l2: "它一直没有变化。",
-      l3: "也没有继续往下发展。",
-      level,
-    };
-  }
+    const template = templates[startIndex];
+    return normalizeEchoWhitespace(typeof template === "function" ? template(context) : template);
+  };
 
   return {
-    l1: pattern.text?.l1 || "",
-    l2: pattern.text?.l2 || "",
-    l3: pattern.text?.l3 || "",
+    l1,
+    l2: level >= 2 ? pickCompanion("l2") : "",
+    l3: level >= 3 ? pickCompanion("l3") : "",
     level,
   };
 }
@@ -1962,14 +3953,8 @@ function renderHistory() {
 
     const metadataNode = node.querySelector(".history-metadata");
     if (metadataNode && entry.metadata?.anchor) {
-      metadataNode.textContent = `[ ${entry.metadata.anchor} ]`;
+      metadataNode.textContent = entry.metadata.anchor;
       metadataNode.classList.remove("hidden");
-    }
-
-    const frictionNode = node.querySelector(".history-friction");
-    if (frictionNode && entry.context?.friction >= 8) {
-      frictionNode.textContent = `• 摩擦:${entry.context.friction}`;
-      frictionNode.classList.remove("hidden");
     }
 
     const deleteBtn = node.querySelector(".history-delete-btn");
@@ -1997,7 +3982,7 @@ function renderHistory() {
           ].filter(Boolean),
         );
     const flashbackSummary = entry.system?.flashback || "";
-    const secondarySummary = [echoSummary, flashbackSummary].filter(Boolean).join(" ");
+    const secondarySummary = flashbackSummary || echoSummary;
     if (echoNode && secondaryNode && secondarySummary) {
       echoNode.textContent = secondarySummary;
       secondaryNode.classList.remove("hidden");
@@ -2098,46 +4083,42 @@ function renderGraph() {
   const graph = buildGraph(state.entries);
   layoutGraph(graph, canvas);
 
-  const draw = (timestamp) => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    Object.entries(graph.edges).forEach(([edgeKey, weight]) => {
-      const [sourceId, targetId] = edgeKey.split("-");
-      const source = graph.nodes[sourceId];
-      const target = graph.nodes[targetId];
-      if (!source || !target) return;
+  Object.entries(graph.edges).forEach(([edgeKey, weight]) => {
+    const [sourceId, targetId] = edgeKey.split("-");
+    const source = graph.nodes[sourceId];
+    const target = graph.nodes[targetId];
+    if (!source || !target) return;
 
-      const sourceOffset = Math.sin((timestamp / 1100) + hashCode(source.id) * 0.01) * 1.6;
-      const targetOffset = Math.sin((timestamp / 1100) + hashCode(target.id) * 0.01) * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(source.x, source.y);
+    ctx.lineTo(target.x, target.y);
+    ctx.strokeStyle = `rgba(200,200,200,${Math.min(weight * 0.08, 0.22)})`;
+    ctx.lineWidth = Math.min(weight, 2.4);
+    ctx.stroke();
+  });
 
-      ctx.beginPath();
-      ctx.moveTo(source.x, source.y + sourceOffset);
-      ctx.lineTo(target.x, target.y + targetOffset);
-      ctx.strokeStyle = `rgba(200,200,200,${Math.min(weight * 0.1, 0.3)})`;
-      ctx.lineWidth = Math.min(weight, 3);
-      ctx.stroke();
-    });
+  const textColor = getComputedStyle(document.body).getPropertyValue("--text-secondary").trim()
+    || getComputedStyle(document.body).getPropertyValue("--text-primary").trim()
+    || "#fff";
 
-    Object.values(graph.nodes).forEach((node) => {
-      const size = Math.min(node.weight * 2, 18);
-      const offsetY = Math.sin((timestamp / 1100) + hashCode(node.id) * 0.01) * 1.6;
+  Object.values(graph.nodes).forEach((node) => {
+    const size = Math.min(node.weight * 1.8, 16);
 
-      ctx.beginPath();
-      ctx.arc(node.x, node.y + offsetY, size, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(220,220,220,0.8)";
-      ctx.fill();
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, size, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(220,220,220,0.62)";
+    ctx.fill();
 
-      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--text-primary").trim() || "#fff";
-      ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-      ctx.fillText(node.id, node.x + size + 2, node.y + offsetY);
-    });
+    ctx.fillStyle = textColor;
+    ctx.globalAlpha = 0.72;
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+    ctx.fillText(node.id, node.x + size + 3, node.y + 1);
+    ctx.globalAlpha = 1;
+  });
 
-    highlightCurrentNode(graph, state.entries[0], timestamp);
-    graphAnimationFrame = window.requestAnimationFrame(draw);
-  };
-
-  renderInsightLegend(graph);
-  graphAnimationFrame = window.requestAnimationFrame(draw);
+  highlightCurrentNode(graph, state.entries[0]);
 }
 
 function highlightCurrentNode(graph, latestEntry, timestamp = 0) {
@@ -2153,11 +4134,10 @@ function highlightCurrentNode(graph, latestEntry, timestamp = 0) {
   keys.forEach((key) => {
     const node = graph.nodes[key];
     if (!node) return;
-    const offsetY = Math.sin((timestamp / 1100) + hashCode(node.id) * 0.01) * 1.6;
 
     ctx.beginPath();
-    ctx.arc(node.x, node.y + offsetY, 22, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
     ctx.stroke();
   });
 }
@@ -2206,22 +4186,7 @@ function calculateFocusTrend(entries) {
 function renderInsightSummary() {
   if (!elements.insightSummary) return;
 
-  const entries = state.entries.slice(0, 12);
-  const graph = buildGraph(state.entries);
-  const metrics = getGraphMetrics(graph);
-  const topNode = metrics.topNode?.id || "此刻";
-  const topEdge = metrics.strongestEdge ? metrics.strongestEdge[0].split("-").join(" / ") : "";
-  const latest = entries[0];
-  const anchor = latest?.metadata?.anchor || "未标记";
-
-  elements.insightSummary.innerHTML = `
-    <div class="trend-label">当前重心</div>
-    <div class="trend-main">${topNode}</div>
-    <div class="insight-copy">
-      最近的记录更常回到「${topNode}」，当前状态靠近「${anchor}」。
-      ${topEdge ? `最强连接出现在 ${topEdge}。` : ""}
-    </div>
-  `;
+  elements.insightSummary.innerHTML = `<p class="history-narrative-line">${buildHistoryNarrative(state.entries)}</p>`;
 }
 
 function calculateRiskSignal(entries) {
@@ -2413,9 +4378,44 @@ function renderTrends() {
 function renderInsightViewV2() {
   renderInsightSummary();
   renderGraph();
-  renderTrends();
-  TracePrediction.update();
-  renderRiskSignal();
+}
+
+function buildHistoryNarrative(entries) {
+  if (!entries?.length) return "这里还没有留下什么。";
+
+  const recent = entries.slice(0, 8);
+  const graph = buildGraph(entries);
+  const metrics = getGraphMetrics(graph);
+  const topNode = metrics.topNode?.id || "此刻";
+  const latestAnchor = recent[0]?.metadata?.anchor || "";
+  const inertia = calculateTrendInertia(entries);
+  const avgFriction = recent.reduce((sum, entry) => sum + (entry.context?.friction || 0), 0) / recent.length;
+  const lateNightCount = recent.filter((entry) => entry.context?.timePhase === "深夜").length;
+  const openLoopCount = recent.filter((entry) =>
+    ["想", "应该", "但是"].some((anchor) => (entry.content || "").includes(anchor)),
+  ).length;
+
+  if (inertia.type === "up") {
+    return `最近的记录正慢慢往前走，但还是常常回到「${topNode}」。`;
+  }
+
+  if (inertia.type === "down" && (avgFriction >= 8 || latestAnchor === "沉缩" || latestAnchor === "焦滞")) {
+    return `最近的记录往里收了一些，还是没有离开「${topNode}」。`;
+  }
+
+  if (lateNightCount >= 4 || openLoopCount >= 4) {
+    return `最近的记录总在同一个位置附近停住，还绕着「${topNode}」。`;
+  }
+
+  if (latestAnchor === "游离") {
+    return `最近的记录有些散开，却还是围着「${topNode}」打转。`;
+  }
+
+  if (latestAnchor === "澄明") {
+    return `最近的记录开始有了方向，但还牵着「${topNode}」。`;
+  }
+
+  return `最近的记录一直回到「${topNode}」，它还留在这里。`;
 }
 
 function loadEntryForEdit(id) {
@@ -2552,12 +4552,12 @@ function collectActivePatterns(entries) {
 
   const topTopic = findMostFrequent(topics);
   if (topTopic && topics.filter((topic) => topic === topTopic).length >= 2) {
-    patterns.push(`最近几次都回到了「${topTopic}」。`);
+    patterns.push(`「${topTopic}」最近一直在回来。`);
   }
 
   const topEmotion = findMostFrequent(emotions);
   if (topEmotion && topEmotion !== "平静" && emotions.filter((emotion) => emotion === topEmotion).length >= 2) {
-    patterns.push(`「${topEmotion}」这种感觉最近反复出现。`);
+    patterns.push(`「${topEmotion}」还没有完全退下去。`);
   }
 
   return patterns;
@@ -2568,11 +4568,11 @@ function collectOpenLoops(entries) {
   const recentTexts = entries.slice(0, 6).map((entry) => entry.content || "");
 
   if (recentTexts.filter((text) => containsAny(text, ["开始", "准备", "打开", "重启"])).length >= 3) {
-    loops.push("你最近几次都停在“开始之前”。");
+    loops.push("最近总会停在开始之前。");
   }
 
   if (entries.slice(0, 6).filter((entry) => entry.context?.friction >= 8).length >= 3) {
-    loops.push("你最近几次写得都很费力，像是有件事还没说开。");
+    loops.push("最近总有一层没真正说开。");
   }
 
   return loops;
@@ -2582,13 +4582,13 @@ function collectIdentityMemory(entries) {
   const identity = [];
   const allTopics = entries.flatMap((entry) => inferTopics(entry.content || "", entry));
   const topTopic = findMostFrequent(allTopics);
-  if (topTopic) identity.push(`你常常会回到「${topTopic}」这件事。`);
+  if (topTopic) identity.push(`你常会回到「${topTopic}」。`);
 
   const frequentDefense = findMostFrequent(
     entries.map((entry) => inferDefenseSignal(entry.content || "", entry)).filter(Boolean),
   );
   if (frequentDefense && frequentDefense !== "直接表达") {
-    identity.push(`你习惯先用「${frequentDefense}」来保护自己。`);
+    identity.push(`你总会先用「${frequentDefense}」把自己护住一点。`);
   }
 
   return identity;
@@ -2665,16 +4665,34 @@ async function reanalyzeEntriesIfNeeded() {
   for (let index = 0; index < state.entries.length; index += 1) {
     const entry = state.entries[index];
     const previousEntries = [...rebuilt, ...state.entries.slice(index + 1)];
+    const observation = entry.analysis?.observation;
+    const needsRefresh =
+      !entry.analysis?.response?.echo
+      || isDeadGenericEchoText(entry.analysis?.response?.echo)
+      || isDeadGenericEchoText(entry.analysis?.response?.pattern_hint)
+      || isDeadGenericEchoPayload(entry.system?.echo)
+      || !entry.analysis?.interpretation?.echo_family
+      || !entry.analysis?.interpretation?.echo_tone
+      || !observation
+      || observation.version !== OBSERVATION_MODEL_VERSION
+      || !Array.isArray(observation.classes)
+      || !observation.classes.length
+      || !observation.outputReadiness?.echo
+      || !observation.outputReadiness?.history;
+
     if (
-      !entry.analysis?.response?.echo &&
-      !entry.analysis?.response?.question &&
-      !entry.tags?.emotion
+      needsRefresh
+      || (!entry.analysis?.response?.question && !entry.tags?.emotion)
     ) {
       entry.tags = {
         emotion: detectEmotion(entry.content || "", entry),
         keywords: extractKeywords(entry.content || "", entry),
       };
       entry.analysis = AIEngine.analyze(entry, [entry, ...previousEntries.filter((item) => item.id !== entry.id)]);
+      if (!entry.system) entry.system = {};
+      if (isDeadGenericEchoPayload(entry.system?.echo) || !entry.system?.echo?.l1) {
+        entry.system.echo = buildEntryEchoCard(entry);
+      }
       await saveEntryRecord(entry);
       changed = true;
     }
@@ -2701,6 +4719,14 @@ function inferSurfaceEmotion(text, entry) {
   return scoreMap[topEmotion] > 0 ? topEmotion : "平静";
 }
 
+function getObservationClassScore(observation, key) {
+  return observation?.classes?.find((item) => item.key === key)?.score || 0;
+}
+
+function getObservationSignalScore(observation, layerKey, signalKey) {
+  return observation?.layers?.[layerKey]?.signals?.find((item) => item.key === signalKey)?.score || 0;
+}
+
 function inferTopics(text, entry) {
   const topics = Object.entries(Lexicon.topics)
     .filter(([, triggers]) => triggers.some((trigger) => text.includes(trigger)))
@@ -2722,8 +4748,12 @@ function extractKeywords(text) {
   return anchors.filter((anchor) => text.includes(anchor));
 }
 
-function inferDefenseSignal(text, entry) {
+function inferDefenseSignal(text, entry, observation) {
   if (entry.context?.friction >= 10 && !text) return "强防御";
+
+  if (getObservationClassScore(observation, "over_control") >= 0.64) return "合理化";
+  if (getObservationClassScore(observation, "suppression") >= 0.6) return "压抑";
+  if (getObservationClassScore(observation, "avoidance") >= 0.58) return "回避";
 
   for (const [signal, triggers] of Object.entries(Lexicon.defense)) {
     if (triggers.some((trigger) => text.includes(trigger))) return signal;
@@ -2733,115 +4763,166 @@ function inferDefenseSignal(text, entry) {
   return "直接表达";
 }
 
-function inferCoreTension(text, entry, memory) {
+function inferCoreTension(text, entry, memory, observation) {
+  const primaryClass = observation?.outputReadiness?.echo?.primaryClass || "";
+  const repeatedTheme = observation?.layers?.longitudinalMemory?.patterns?.repeatedTheme || "";
+
   const matchedPair = Lexicon.tensionPairs.find((pair) => pair.when(text));
   if (matchedPair) return matchedPair.label;
 
+  if (primaryClass === "pre_start_loop") {
+    return "事情总停在开始之前。";
+  }
+
+  if (primaryClass === "held_back_core" || primaryClass === "unfinished_meaning") {
+    return "最关键的那句还没有真正落下来。";
+  }
+
+  if (primaryClass === "drift") {
+    return "你在旁边绕了一圈，中心还留在原地。";
+  }
+
+  if (primaryClass === "emotional_compression" || primaryClass === "withdrawal") {
+    return "你在往里收，那件事并没有退下去。";
+  }
+
+  if (primaryClass === "role_pressure" || primaryClass === "identity_strain") {
+    return "外面的要求和里面真正想要的，还没有站在一起。";
+  }
+
+  if (primaryClass === "self_contradiction") {
+    return "你一边知道，一边又停在原地。";
+  }
+
   if (entry.context?.friction >= 10 && entry.context?.durationSec >= 120) {
-    return "你不是没话说，你是在犹豫要不要说透。";
+    return "你不是没话说，只是一直在收住。";
   }
 
   if (memory.openLoops.length > 0 && containsAny(text, ["开始", "明天", "这次", "还是"])) {
-    return "你又回到了那个还没真正开始的地方。";
+    return "事情总停在开始之前。";
   }
 
   if (entry.metadata?.anchor === "焦滞") {
-    return "你感觉到卡住了，但还没决定往哪走。";
+    return "你卡住了，但还没离开这里。";
   }
 
   if (entry.metadata?.anchor === "游离") {
-    return "你的注意力在飘，但问题还在。";
+    return "你先往旁边走开了。";
   }
 
   if (entry.metadata?.anchor === "澄明") {
-    return "你已经看见一点答案了，只是还没开始动。";
+    return "你已经靠近了，只是还没真正动。";
   }
 
   if (entry.metadata?.anchor === "沉缩") {
-    return "你在往里收，但那件事并没有过去。";
+    return "你在往里收，那件事还没过去。";
+  }
+
+  if (repeatedTheme) {
+    return `你还是会回到「${repeatedTheme}」。`;
   }
 
   return "";
 }
 
-function inferPatternLink(topics, surfaceEmotion, memory) {
+function inferPatternLink(topics, surfaceEmotion, memory, observation) {
+  const repeatedTheme = observation?.layers?.longitudinalMemory?.patterns?.repeatedTheme || "";
+  const continuityThread = observation?.outputReadiness?.continuity?.threadClass || "";
+
+  if (repeatedTheme) {
+    return `「${repeatedTheme}」还是会回来。`;
+  }
+
   const topicMatch = topics.find((topic) =>
     memory.activePatterns.some((pattern) => pattern.includes(`「${topic}」`)),
   );
   if (topicMatch) {
-    return `你不是第一次写到「${topicMatch}」了。`;
+    return `「${topicMatch}」还是会回来。`;
   }
 
   if (surfaceEmotion !== "平静" && memory.activePatterns.some((pattern) => pattern.includes(`「${surfaceEmotion}」`))) {
-    return `这种「${surfaceEmotion}」的感觉，最近已经连续出现。`;
+    return `「${surfaceEmotion}」还没有完全退下去。`;
   }
 
   const openLoop = memory.openLoops[0];
+  if (!openLoop && continuityThread === "unresolved_return") {
+    return "它还没有真正退下去。";
+  }
   return openLoop || "";
 }
 
-function inferConfidence(entry, surfaceEmotion, coreTension, patternLink) {
+function inferConfidence(entry, surfaceEmotion, coreTension, patternLink, observation) {
   let score = 0.18;
   if (surfaceEmotion && surfaceEmotion !== "平静") score += 0.16;
   if (coreTension) score += 0.24;
   if (patternLink) score += 0.2;
   if (entry.context?.friction >= 8) score += 0.12;
   if (entry.context?.durationSec >= 120) score += 0.1;
+  score += (observation?.inference?.confidenceBand || 0) * 0.26;
+  if ((observation?.classes?.length || 0) >= 3) score += 0.06;
+  if (getObservationSignalScore(observation, "psychologicalDynamic", "unfinished_internal_conflict") >= 0.66) {
+    score += 0.06;
+  }
   return Math.min(score, 0.92);
 }
 
-function buildAnalysisEcho(interpretation, memory) {
-  if (interpretation.core_tension) {
-    return interpretation.core_tension.endsWith("。")
-      ? interpretation.core_tension
-      : `${interpretation.core_tension}。`;
+function buildAnalysisEcho(interpretation, memory, entry) {
+  const primary = generateEchoSentence(entry, interpretation, memory, {
+    family: interpretation.echo_family,
+    tone: interpretation.echo_tone,
+  });
+
+  if (primary && !isDeadGenericEchoText(primary)) {
+    return primary;
   }
 
-  if (interpretation.pattern_link) {
-    return interpretation.pattern_link;
-  }
-
-  if (interpretation.defense_signal === "回避") {
-    return "你在说问题之前，已经先往后退了一步。";
-  }
-
-  if (interpretation.surface_emotion !== "平静") {
-    return `这段话看起来很平静，但里面更像是「${interpretation.surface_emotion}」。`;
-  }
-
-  if (memory.longIdentityMemory[0]) {
-    return memory.longIdentityMemory[0];
-  }
-
-  return "你写下的不只是内容，还有当时的状态。";
+  if (interpretation.pattern_link) return interpretation.pattern_link;
+  if (memory.longIdentityMemory[0]) return memory.longIdentityMemory[0];
+  return "这里还没有完全落下。";
 }
 
 function buildAnalysisQuestion(interpretation, memory) {
+  if (interpretation.echo_family === "pre_start") {
+    return "你真正停住的是哪一下？";
+  }
+
+  if (["held_back", "almost_said"].includes(interpretation.echo_family)) {
+    return "你收住的那句是什么？";
+  }
+
+  if (interpretation.echo_family === "drift") {
+    return "你刚才绕开的是哪一点？";
+  }
+
+  if (interpretation.echo_family === "inward_pull") {
+    return "你往里收的时候，最先避开的是什么？";
+  }
+
   if (interpretation.core_tension.includes("行动")) {
-    return "你是在怕结果，还是怕一开始就停不下来？";
+    return "压住你的，是结果，还是一开始就停不下来？";
   }
 
   if (interpretation.defense_signal === "回避") {
-    return "你在躲开的，是这件事本身，还是它背后的现实？";
+    return "你先退开的，是事情，还是后面的现实？";
   }
 
   if (interpretation.defense_signal === "压抑") {
-    return "如果不再假装没事，你最想先说什么？";
+    return "如果不先压住它，最先出来的会是什么？";
   }
 
   if (interpretation.pattern_link || memory.openLoops.length) {
-    return "和前几次比，真正没有变的是什么？";
+    return "和前几次比，真正没变的是什么？";
   }
 
   if (interpretation.topic_entities.includes("关系")) {
-    return "你在这段关系里更难承认的是失望，还是需要？";
+    return "这里更难碰到的是失望，还是需要？";
   }
 
   if (interpretation.topic_entities.includes("工作")) {
-    return "真正压住你的，是事情本身，还是别人会怎么看？";
+    return "压住你的，是事情，还是结果？";
   }
 
-  return "如果只留下一句，你真正想承认的是什么？";
+  return "如果只留一句，哪一句最难写？";
 }
 
 function runHealthChecks() {

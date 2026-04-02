@@ -89,7 +89,7 @@
       </section>
 
       <section id="onboarding-view" class="view-section active">
-        <div class="threshold-shell">
+        <div id="threshold-shell" class="threshold-shell">
           <div class="trace-identity trace-identity--hero">
             <img
               id="onboarding-trace-mark"
@@ -104,9 +104,9 @@
             />
             <span class="trace-wordmark trace-wordmark--identity">Trace</span>
           </div>
-          <p id="threshold-line" class="threshold-line">Not everything needs to be said.</p>
+          <p id="threshold-line" class="threshold-line">先留下这一句。</p>
           <div class="action-shell action-shell--threshold">
-            <button id="enter-writing-btn" class="primary-action-btn" type="button">Begin</button>
+            <button id="enter-writing-btn" class="primary-action-btn" type="button">继续</button>
           </div>
         </div>
       </section>
@@ -173,18 +173,9 @@
         </div>
         
         <div id="history-pattern-layer" class="history-pattern-layer empty">
-          <div class="insight-overview">
-            <div id="insight-summary" class="trend-card trend-wide"></div>
-            <div id="trend-energy" class="trend-card"></div>
-            <div id="trend-focus" class="trend-card"></div>
-            <div id="trend-prediction" class="trend-card trend-wide"></div>
-            <div id="trend-risk" class="trend-card trend-wide"></div>
-          </div>
+          <div id="insight-summary" class="history-narrative"></div>
           <div class="insight-graph">
             <canvas id="insight-canvas"></canvas>
-          </div>
-          <div class="insight-trends">
-            <div id="insight-legend" class="insight-legend"></div>
           </div>
         </div>
         
@@ -198,7 +189,6 @@
           <div class="history-meta">
             <time class="history-time"></time>
             <span class="history-metadata hidden"></span>
-            <span class="history-friction hidden"></span>
             <button class="history-delete-btn" type="button">删除</button>
           </div>
           <p class="history-raw-text"></p>
