@@ -85,6 +85,11 @@ body::after {
 button, textarea { font: inherit; outline: none; border: none; background: none; }
 .hidden { display: none !important; }
 
+body.runtime-pending .view-section,
+body.runtime-pending .history-panel {
+  visibility: hidden;
+}
+
 .app-shell {
   position: relative;
   width: min(100%, 820px);
@@ -642,6 +647,9 @@ body.listening-mode .status-indicator {
   box-shadow: -10px 0 40px rgba(0,0,0,0.05);
   animation: slideIn 0.38s var(--motion-ease-settle);
 }
+.history-panel.is-closing {
+  animation: slideOut 0.28s var(--motion-ease-fluid) forwards;
+}
 .history-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 24px; }
 .history-header h2 { font-size: 1.1rem; font-weight: 500; color: var(--text-primary); letter-spacing: 0.05em;}
 .close-btn {
@@ -808,6 +816,7 @@ body.listening-mode .status-indicator {
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slideIn { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(12px); } }
 @keyframes ghostReveal {
   0% { filter: blur(10px); opacity: 0; transform: translateY(6px); }
   60% { opacity: 1; }

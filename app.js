@@ -884,13 +884,23 @@ async function enterOnboardingFlow() {
 }
 
 async function startTraceRuntime() {
-  if (shouldRequireUnlock()) {
-    showView("unlock");
-    renderAccessView("idle");
-    return;
-  }
+  try {
+    if (shouldRequireUnlock()) {
+      showView("unlock");
+      renderAccessView("idle");
+      return;
+    }
 
-  await enterOnboardingFlow();
+    await enterOnboardingFlow();
+  } catch (error) {
+    health.lastError = error instanceof Error ? error.message : String(error);
+    if (shouldRequireUnlock()) {
+      showView("unlock");
+      renderAccessView("failed", "打开失败");
+      return;
+    }
+    showView("onboarding");
+  }
 }
 
 function updateHomepageState(hasEntries) {
@@ -988,7 +998,7 @@ function setTraceLoading(active, label = "正在进入…") {
   elements.traceLoading.classList.toggle("is-active", active);
 
   if (active) {
-    animateTraceMark(elements.unlockTraceMark, "is-loading", 0);
+    animateTraceMark(elements.traceLoadingMark, "is-loading", 0);
   } else {
     clearTraceMarkState(elements.traceLoadingMark);
     clearTraceMarkState(elements.unlockTraceMark);
@@ -1324,7 +1334,13 @@ function bindEvents() {
   if (elements.historyToggle) {
     elements.historyToggle.addEventListener("click", () => {
       state.historyOpen = true;
+      if (closeHistory._timer) {
+        window.clearTimeout(closeHistory._timer);
+        closeHistory._timer = null;
+      }
+      elements.historyPanel.classList.remove("is-closing");
       elements.historyPanel.classList.remove("hidden");
+      elements.historyPanel.setAttribute("aria-hidden", "false");
       renderHistory();
     });
   }
@@ -1518,9 +1534,27 @@ function triggerSystemEcho() {
 }
 
 function closeHistory() {
+  if (!state.historyOpen || !elements.historyPanel || elements.historyPanel.classList.contains("hidden")) {
+    return;
+  }
+
   state.historyOpen = false;
-  elements.historyPanel.classList.add("hidden");
-  elements.rawMemoryInput.focus();
+  elements.historyPanel.setAttribute("aria-hidden", "true");
+  elements.historyPanel.classList.remove("hidden");
+  elements.historyPanel.classList.add("is-closing");
+
+  if (closeHistory._timer) {
+    window.clearTimeout(closeHistory._timer);
+  }
+
+  closeHistory._timer = window.setTimeout(() => {
+    elements.historyPanel.classList.add("hidden");
+    elements.historyPanel.classList.remove("is-closing");
+    closeHistory._timer = null;
+    if (!elements.composeView.classList.contains("hidden")) {
+      elements.rawMemoryInput.focus();
+    }
+  }, 280);
 }
 
 function renderEchoBlock(response) {
@@ -2428,6 +2462,7 @@ async function deleteEntry(id) {
 }
 
 function showView(viewName) {
+  document.body.classList.remove("runtime-pending");
   if (elements.unlockView) elements.unlockView.classList.toggle("hidden", viewName !== "unlock");
   elements.onboardingView.classList.toggle("hidden", viewName !== "onboarding");
   elements.composeView.classList.toggle("hidden", viewName !== "compose");
