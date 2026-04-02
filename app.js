@@ -696,6 +696,7 @@ const voiceState = {
   listening: false,
   transcribing: false,
   didCaptureFinal: false,
+  interimTranscript: "",
   sessionChars: 0,
 };
 
@@ -4280,11 +4281,28 @@ function insertTextAtCursor(text) {
   window.localStorage.setItem(DRAFT_KEY, state.draft);
 }
 
+function commitVoiceTranscript(transcript, { message = "刚才说的，记下了" } = {}) {
+  const finalTranscript = (transcript || "").trim();
+  if (!finalTranscript) return false;
+
+  noteVoiceDraftMutation();
+  noteSessionVoiceCommit(finalTranscript);
+  voiceState.didCaptureFinal = true;
+  voiceState.sessionChars += finalTranscript.replace(/\s+/g, "").length;
+  voiceState.interimTranscript = "";
+  insertTextAtCursor(finalTranscript);
+  voiceState.transcribing = false;
+  setStatusMessage(message, 1400);
+  syncControlHub();
+  return true;
+}
+
 function stopVoiceCapture({ silent = false } = {}) {
   if (!recognition || (!voiceState.listening && !voiceState.transcribing)) {
     voiceState.listening = false;
     voiceState.transcribing = false;
     voiceState.didCaptureFinal = false;
+    voiceState.interimTranscript = "";
     voiceState.sessionChars = 0;
     syncControlHub();
     syncAmbientPresence({ immediate: true });
@@ -4296,7 +4314,10 @@ function stopVoiceCapture({ silent = false } = {}) {
   }
 
   voiceState.listening = false;
-  voiceState.transcribing = voiceState.sessionChars > 0;
+  voiceState.transcribing = Boolean(
+    voiceState.sessionChars > 0
+    || voiceState.interimTranscript,
+  );
   recognition.stop();
   if (!silent && voiceState.transcribing) {
     setStatusMessage("正在变成字…", 0);
@@ -4323,6 +4344,7 @@ function initVoiceRecognition() {
     voiceState.listening = true;
     voiceState.transcribing = false;
     voiceState.didCaptureFinal = false;
+    voiceState.interimTranscript = "";
     voiceState.sessionChars = 0;
     setStatusMessage("在听", 0);
     syncControlHub();
@@ -4332,6 +4354,7 @@ function initVoiceRecognition() {
 
   recognition.onresult = (event) => {
     let finalTranscript = "";
+    let interimTranscript = "";
 
     for (let index = event.resultIndex; index < event.results.length; index += 1) {
       const transcript = event.results[index][0]?.transcript?.trim() || "";
@@ -4339,18 +4362,15 @@ function initVoiceRecognition() {
 
       if (event.results[index].isFinal) {
         finalTranscript += transcript;
+      } else {
+        interimTranscript += transcript;
       }
     }
 
+    voiceState.interimTranscript = interimTranscript.trim();
+
     if (finalTranscript) {
-      noteVoiceDraftMutation();
-      noteSessionVoiceCommit(finalTranscript);
-      voiceState.didCaptureFinal = true;
-      voiceState.sessionChars += finalTranscript.replace(/\s+/g, "").length;
-      insertTextAtCursor(finalTranscript);
-      voiceState.transcribing = false;
-      setStatusMessage("刚才说的，记下了", 1400);
-      syncControlHub();
+      commitVoiceTranscript(finalTranscript);
     }
   };
 
@@ -4358,6 +4378,7 @@ function initVoiceRecognition() {
     voiceState.listening = false;
     voiceState.transcribing = false;
     voiceState.didCaptureFinal = false;
+    voiceState.interimTranscript = "";
     voiceState.sessionChars = 0;
 
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -4389,9 +4410,16 @@ function initVoiceRecognition() {
   recognition.onend = () => {
     const wasListening = voiceState.listening;
     const hadFinal = voiceState.didCaptureFinal;
+    const fallbackTranscript = voiceState.interimTranscript;
     voiceState.listening = false;
     voiceState.transcribing = false;
+
+    if (!hadFinal && fallbackTranscript) {
+      commitVoiceTranscript(fallbackTranscript, { message: "刚才那句，记下了" });
+    }
+
     voiceState.didCaptureFinal = false;
+    voiceState.interimTranscript = "";
     voiceState.sessionChars = 0;
 
     if (wasListening && elements.saveStatus?.textContent === "在听") {
