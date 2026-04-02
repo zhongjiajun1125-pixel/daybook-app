@@ -21,6 +21,12 @@ const TRACE_LOGO_ASSETS = Object.freeze({
   light: "./trace-logo-black.png",
   dark: "./trace-logo-white.png",
 });
+const MOTION = Object.freeze({
+  logoSealMs: 940,
+  logoEchoMs: 760,
+  echoCardHoldMs: 4600,
+  echoCardExitMs: 380,
+});
 
 let audioCtx = null;
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -246,7 +252,6 @@ let state = {
   profileName: window.localStorage.getItem(PROFILE_NAME_KEY) || "",
   bioEnrolled: window.localStorage.getItem(BIO_KEY) === "1",
   pinEnabled: Boolean(window.localStorage.getItem(PIN_HASH_KEY)),
-  accessMode: "choice",
   echoChain: {},
   pendingEcho: null,
   lastEchoText: null,
@@ -258,8 +263,6 @@ let implicitSession = {
   backspaceCount: 0,
   hasTyped: false,
 };
-
-const SESSION_UNLOCK_KEY = "trace-session-unlocked";
 
 let echoCardTimer = null;
 let insightResizeTimer = null;
@@ -847,7 +850,6 @@ async function bootSystem() {
 
     const hasEntries = state.entries.length > 0;
     updateHomepageState(hasEntries);
-    showView("onboarding");
 
     if (hasEntries) {
       const sniperEcho = RetentionSniper.check();
@@ -869,6 +871,26 @@ async function bootSystem() {
       elements.unlockBtn.textContent = "打开失败";
     }
   }
+}
+
+function shouldRequireUnlock() {
+  return state.pinEnabled && !sessionKey;
+}
+
+async function enterOnboardingFlow() {
+  await bootWithTimeout();
+  showView("onboarding");
+  checkPendingEchoOnBoot();
+}
+
+async function startTraceRuntime() {
+  if (shouldRequireUnlock()) {
+    showView("unlock");
+    renderAccessView("idle");
+    return;
+  }
+
+  await enterOnboardingFlow();
 }
 
 function updateHomepageState(hasEntries) {
@@ -1136,13 +1158,11 @@ function renderAccessView(status = "idle", customSubtitle = "") {
 async function completeUnlock() {
   renderAccessView("success");
   setTraceLoading(true, "正在进入…");
-  window.sessionStorage.setItem(SESSION_UNLOCK_KEY, "1");
   await new Promise((resolve) => window.setTimeout(resolve, 280));
   showPinPanel(false);
-  await bootSystem();
-  checkPendingEchoOnBoot();
+  await enterOnboardingFlow();
   setTraceLoading(false);
-  animateTraceMark(elements.unlockTraceMark, "is-echo", 880);
+  animateTraceMark(elements.unlockTraceMark, "is-echo", MOTION.logoEchoMs);
 }
 
 async function handleUnlock() {
@@ -1176,7 +1196,6 @@ async function handlePinSubmit() {
 
 function init() {
   resetLegacyBioState();
-  state.accessMode = state.pinEnabled ? "verify" : "choice";
   syncProfileUI();
   renderAccessView("idle");
   initVoiceRecognition();
@@ -1204,7 +1223,6 @@ async function handleDisablePin() {
     state.pinEnabled = false;
     state.bioEnrolled = false;
     sessionKey = null;
-    state.accessMode = "choice";
     if (elements.pinInput) elements.pinInput.value = "";
     renderAccessView("idle", "密码已关闭");
   } catch {
@@ -1225,7 +1243,6 @@ async function handleChangePin() {
       await db.init();
     }
     state.entries = await hydrateStoredEntries(await db.getAll());
-    state.accessMode = "resetPin";
     if (elements.pinInput) elements.pinInput.value = "";
     renderAccessView("idle", "输入新的 4 到 6 位数字");
   } catch {
@@ -1416,7 +1433,7 @@ async function submitEntry() {
   elements.rawMemoryInput.classList.add("ink-dissolve");
   document.body.classList.remove("focus-mode");
   elements.saveStatus.textContent = "封存中…";
-  animateTraceMark(elements.composeTraceMark, "is-sealing", 1080);
+  animateTraceMark(elements.composeTraceMark, "is-sealing", MOTION.logoSealMs);
   playTraceFeedback();
 
   await saveEntryRecord(entry);
@@ -1792,7 +1809,7 @@ function showEchoCard(payload) {
   elements.echoCardLine1.textContent = payload.l1 || "";
   elements.echoCardLine2.textContent = payload.l2 || "";
   elements.echoCardLine3.textContent = payload.l3 || "";
-  animateTraceMark(elements.composeTraceMark, "is-echo", 880);
+  animateTraceMark(elements.composeTraceMark, "is-echo", MOTION.logoEchoMs);
   if ((payload.level || 0) >= 3) {
     elements.echoCard.style.borderColor = "rgba(255,255,255,0.12)";
   } else {
@@ -1806,7 +1823,7 @@ function showEchoCard(payload) {
   if (echoCardTimer) window.clearTimeout(echoCardTimer);
   echoCardTimer = window.setTimeout(() => {
     hideEchoCard();
-  }, 4800);
+  }, MOTION.echoCardHoldMs);
 }
 
 function hideEchoCard(immediate = false) {
@@ -1827,7 +1844,7 @@ function hideEchoCard(immediate = false) {
   window.setTimeout(() => {
     elements.echoCard.classList.add("hidden");
     elements.echoCard.classList.remove("fade-out");
-  }, 420);
+  }, MOTION.echoCardExitMs);
 }
 
 function checkPendingEchoOnBoot() {
@@ -2417,7 +2434,7 @@ function showView(viewName) {
   elements.globalTools.classList.toggle("hidden", viewName === "onboarding" || viewName === "unlock");
 
   if (viewName === "onboarding") {
-    animateTraceMark(elements.onboardingTraceMark, "is-sealing", 980);
+    animateTraceMark(elements.onboardingTraceMark, "is-sealing", MOTION.logoSealMs);
   }
 }
 function exportEntries() {
@@ -2964,5 +2981,5 @@ window.addEventListener("load", async () => {
   loadSystemState();
   TracePrediction.init();
   cleanupEchoChain();
-  showView(state.pinEnabled ? "unlock" : "onboarding");
+  await startTraceRuntime();
 });

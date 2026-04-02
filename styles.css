@@ -16,6 +16,14 @@
   --trace-mark-opacity: 0.74;
   --trace-wordmark-color: rgba(23, 23, 23, 0.76);
   --trace-wordmark-opacity: 0.64;
+  --motion-ease-fluid: cubic-bezier(0.22, 0.78, 0.24, 1);
+  --motion-ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-duration-fast: 180ms;
+  --motion-duration-base: 320ms;
+  --motion-duration-slow: 560ms;
+  --motion-duration-atmos: 1200ms;
+  --motion-duration-theme: 2600ms;
+  --motion-press-scale: 0.985;
 }
 
 body.time-morning { --bg-color: #f0f4f8; } 
@@ -52,7 +60,9 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
-  transition: background-color 3s ease, color 3s ease;
+  transition:
+    background-color var(--motion-duration-theme) var(--motion-ease-fluid),
+    color var(--motion-duration-theme) var(--motion-ease-fluid);
 }
 
 body::before {
@@ -87,9 +97,15 @@ button, textarea { font: inherit; outline: none; border: none; background: none;
 }
 
 body.focus-mode #global-tools,
-body.focus-mode .compose-footer { opacity: 0.15; transition: opacity 1.5s ease-out; }
+body.focus-mode .compose-footer {
+  opacity: 0.15;
+  transition: opacity var(--motion-duration-slow) var(--motion-ease-fluid);
+}
 body:not(.focus-mode) #global-tools,
-body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s ease-in; }
+body:not(.focus-mode) .compose-footer {
+  opacity: 1;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-fluid);
+}
 
 #global-tools {
   position: fixed;
@@ -103,17 +119,23 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   border-radius: 999px;
   background: rgba(255,255,255,0.08);
   backdrop-filter: blur(14px);
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-base) var(--motion-ease-fluid);
 }
 .ghost-btn {
   color: var(--text-ghost);
   font-size: 0.76rem;
   letter-spacing: 0.14em;
   cursor: pointer;
-  transition: color 0.3s ease, opacity 0.2s ease, transform 0.16s ease;
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-fast) var(--motion-ease-fluid);
   opacity: 0.68;
 }
 .ghost-btn:hover { color: var(--text-primary); opacity: 1; }
-.ghost-btn:active { transform: scale(0.96); }
+.ghost-btn:active { transform: scale(var(--motion-press-scale)); }
 
 .trace-loading {
   position: fixed;
@@ -126,6 +148,9 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   transform: translateX(-50%);
   pointer-events: none;
   opacity: 0.7;
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-base) var(--motion-ease-fluid);
 }
 
 .trace-loading-label {
@@ -143,7 +168,9 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   user-select: none;
   -webkit-user-drag: none;
   transform-origin: center;
-  transition: opacity 0.26s ease, transform 0.38s cubic-bezier(0.22, 0.8, 0.24, 1);
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-slow) var(--motion-ease-settle);
 }
 
 .trace-identity {
@@ -207,15 +234,15 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 
 .trace-loading.is-active .trace-logo--loading,
 .trace-logo.is-loading {
-  animation: traceLogoLoading 1.3s cubic-bezier(0.22, 0.8, 0.24, 1) infinite;
+  animation: traceLogoLoading 1.18s var(--motion-ease-fluid) infinite;
 }
 
 .trace-logo.is-sealing {
-  animation: traceLogoSeal 0.92s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: traceLogoSeal 0.94s var(--motion-ease-settle) forwards;
 }
 
 .trace-logo.is-echo {
-  animation: traceLogoEcho 0.72s ease-out forwards;
+  animation: traceLogoEcho 0.76s var(--motion-ease-fluid) forwards;
 }
 
 .threshold-shell {
@@ -226,7 +253,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   text-align: center;
   margin: 0 auto;
   min-height: 60vh;
-  animation: fadeIn 1.5s ease-out;
+  animation: fadeIn 0.8s var(--motion-ease-fluid);
 }
 
 .threshold-line {
@@ -249,8 +276,13 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   cursor: pointer;
   border-bottom: 1px solid rgba(23, 23, 23, 0.42);
   padding-bottom: 2px;
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-fast) var(--motion-ease-fluid);
 }
-.primary-action-btn:active { transform: scale(0.98); }
+.primary-action-btn:hover { opacity: 0.78; }
+.primary-action-btn:active { transform: scale(var(--motion-press-scale)); }
 
 .unlock-view {
   display: flex;
@@ -297,7 +329,10 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   background: transparent;
   backdrop-filter: none;
   cursor: pointer;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-fast) var(--motion-ease-fluid),
+    border-color var(--motion-duration-base) var(--motion-ease-fluid);
 }
 
 .unlock-btn--primary {
@@ -308,7 +343,7 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
 .unlock-btn:hover {
   opacity: 0.8;
 }
-.unlock-btn:active { transform: scale(0.98); }
+.unlock-btn:active { transform: scale(var(--motion-press-scale)); }
 
 .unlock-secondary-btn,
 .unlock-manage-actions {
@@ -335,7 +370,10 @@ body:not(.focus-mode) .compose-footer { opacity: 1; transition: opacity 0.4s eas
   letter-spacing: 0.22em;
   font-size: 0.98rem;
   opacity: 0.88;
-  transition: border-color 0.2s ease, opacity 0.2s ease;
+  transition:
+    border-color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    color var(--motion-duration-base) var(--motion-ease-fluid);
 }
 
 .pin-input::placeholder {
@@ -384,7 +422,7 @@ body.time-night .primary-action-btn {
   opacity: 0.72;
 }
 .echo-panel.empty { display: none; }
-.echo-text { animation: ghostReveal 1.6s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+.echo-text { animation: ghostReveal 1.08s var(--motion-ease-fluid) forwards; }
 
 .echo-card-layer {
   position: relative;
@@ -432,11 +470,11 @@ body.time-night .compose-footer {
 }
 
 .echo-card.show {
-  animation: echoCardIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: echoCardIn 0.48s var(--motion-ease-settle) forwards;
 }
 
 .echo-card.fade-out {
-  animation: echoCardOut 0.45s ease forwards;
+  animation: echoCardOut 0.38s var(--motion-ease-fluid) forwards;
 }
 
 .echo-card-close {
@@ -446,7 +484,11 @@ body.time-night .compose-footer {
   color: var(--text-ghost);
   font-size: 1rem;
   cursor: pointer;
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid);
 }
+.echo-card-close:hover { color: var(--text-primary); }
 
 .echo-card-line {
   font-family: var(--font-serif);
@@ -487,6 +529,9 @@ body.time-night .compose-footer {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 18px;
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-base) var(--motion-ease-fluid);
 }
 
 .paper-presence {
@@ -500,7 +545,7 @@ body.time-night .compose-footer {
   color: var(--text-ghost);
   font-size: 0.75rem;
   letter-spacing: 0.12em;
-  transition: opacity 0.28s ease;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-fluid);
 }
 .seamless-input {
   width: 100%;
@@ -517,32 +562,51 @@ body.time-night .compose-footer {
 
 .anchor-bar {
   display: flex; gap: 12px; padding-top: 10px;
-  opacity: 0.42; transition: opacity 0.3s ease, transform 0.3s ease;
+  opacity: 0.42;
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-base) var(--motion-ease-fluid);
   flex-wrap: wrap;
 }
 .anchor-bar:hover { opacity: 1; }
 .anchor-btn {
   font-size: 0.8rem; color: var(--text-ghost); 
   border: 1px solid transparent; border-radius: 12px; 
-  padding: 4px 10px; cursor: pointer; transition: all 0.2s ease;
+  padding: 4px 10px; cursor: pointer;
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-fluid),
+    background-color var(--motion-duration-base) var(--motion-ease-fluid),
+    border-color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-fast) var(--motion-ease-fluid);
   background: transparent;
 }
 .anchor-btn:hover { color: var(--text-primary); }
-.anchor-btn:active { transform: scale(0.96); }
+.anchor-btn:active { transform: scale(var(--motion-press-scale)); }
 .anchor-btn.active { color: var(--text-primary); background: rgba(0,0,0,0.04); }
 
-.ink-dissolve { animation: dissolveOut 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; pointer-events: none; }
+.ink-dissolve { animation: dissolveOut 0.78s var(--motion-ease-settle) forwards; pointer-events: none; }
 
 .compose-footer {
   display: flex; justify-content: space-between; align-items: center; padding-top: 12px;
   border-top: 1px solid rgba(0,0,0,0.04);
   color: var(--text-ghost); font-size: 0.85rem;
   margin-top: 18px;
-  transition: opacity 0.28s ease, transform 0.28s ease;
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-base) var(--motion-ease-fluid);
 }
-.subtle-submit-btn { color: var(--text-ghost); cursor: pointer; transition: color 0.2s ease, opacity 0.2s ease, transform 0.16s ease; background: transparent; }
+.subtle-submit-btn {
+  color: var(--text-ghost);
+  cursor: pointer;
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    transform var(--motion-duration-fast) var(--motion-ease-fluid);
+  background: transparent;
+}
 .subtle-submit-btn:hover { color: var(--text-primary); }
-.subtle-submit-btn:active { transform: scale(0.96); }
+.subtle-submit-btn:active { transform: scale(var(--motion-press-scale)); }
 .status-indicator { font-size: 0.8rem; letter-spacing: 0.05em; }
 .footer-actions { display: flex; gap: 24px; }
 
@@ -560,14 +624,14 @@ body.focus-mode #global-tools {
 
 body.listening-mode .writing-card {
   border-color: rgba(255,255,255,0.28);
-  box-shadow: 0 12px 56px rgba(255,255,255,0.06);
-  animation: breathingBox 4s infinite alternate ease-in-out;
+  box-shadow: 0 12px 48px rgba(255,255,255,0.04);
+  animation: breathingBox 5.6s infinite alternate var(--motion-ease-fluid);
 }
 
 body.listening-mode .status-indicator {
   color: var(--text-primary);
   opacity: 0.62;
-  animation: pulseText 2s infinite ease-in-out;
+  animation: pulseText 2.6s infinite var(--motion-ease-fluid);
 }
 
 /* 拓扑页核心样式 */
@@ -576,11 +640,19 @@ body.listening-mode .status-indicator {
   background: var(--bg-color); border-left: 1px solid var(--border-light);
   padding: 40px 32px; overflow-y: auto; z-index: 100;
   box-shadow: -10px 0 40px rgba(0,0,0,0.05);
-  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideIn 0.38s var(--motion-ease-settle);
 }
 .history-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 24px; }
 .history-header h2 { font-size: 1.1rem; font-weight: 500; color: var(--text-primary); letter-spacing: 0.05em;}
-.close-btn { color: var(--text-ghost); cursor: pointer; font-size: 0.9rem; }
+.close-btn {
+  color: var(--text-ghost);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid);
+}
+.close-btn:hover { color: var(--text-primary); }
 
 /* 模式层视图 */
 .history-pattern-layer {
@@ -679,7 +751,11 @@ body.listening-mode .status-indicator {
 
 .history-list { display: flex; flex-direction: column; gap: 16px; }
 .history-item {
-  display: flex; flex-direction: column; gap: 10px; opacity: 0.9; transition: opacity 0.2s, background-color 0.2s ease;
+  display: flex; flex-direction: column; gap: 10px; opacity: 0.9;
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-fluid),
+    background-color var(--motion-duration-base) var(--motion-ease-fluid),
+    border-color var(--motion-duration-base) var(--motion-ease-fluid);
   padding: 14px 15px; border-radius: 18px; background: rgba(255,255,255,0.02);
   border: 1px solid var(--border-light);
 }
@@ -707,6 +783,9 @@ body.listening-mode .status-indicator {
   letter-spacing: 0.08em;
   cursor: pointer;
   opacity: 0.68;
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-fluid),
+    opacity var(--motion-duration-base) var(--motion-ease-fluid);
 }
 .history-delete-btn:hover {
   color: var(--text-primary);
@@ -727,68 +806,68 @@ body.listening-mode .status-indicator {
   font-family: var(--font-serif);
 }
 
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes ghostReveal {
-  0% { filter: blur(12px); opacity: 0; transform: translateY(2px); }
-  50% { opacity: 1; }
+  0% { filter: blur(10px); opacity: 0; transform: translateY(6px); }
+  60% { opacity: 1; }
   100% { filter: blur(0); opacity: 1; transform: translateY(0); }
 }
 @keyframes dissolveOut {
   0% { filter: blur(0); opacity: 1; transform: translateY(0); }
-  100% { filter: blur(10px); opacity: 0; transform: translateY(-6px); }
+  100% { filter: blur(8px); opacity: 0; transform: translateY(-4px); }
 }
 @keyframes echoCardIn {
-  0% { opacity: 0; transform: translateY(12px); }
+  0% { opacity: 0; transform: translateY(10px); }
   100% { opacity: 1; transform: translateY(0); }
 }
 @keyframes echoCardOut {
   0% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 0; transform: translateY(-6px); }
 }
 @keyframes breathingBox {
-  0% { box-shadow: 0 12px 40px rgba(15, 23, 42, 0.03); border-color: rgba(255,255,255,0.18); }
-  100% { box-shadow: 0 12px 60px rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.3); }
+  0% { box-shadow: 0 12px 44px rgba(15, 23, 42, 0.03); border-color: rgba(255,255,255,0.16); }
+  100% { box-shadow: 0 12px 52px rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.24); }
 }
 @keyframes pulseText {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.8; }
+  0%, 100% { opacity: 0.38; }
+  50% { opacity: 0.68; }
 }
 
 @keyframes traceLogoLoading {
   0% {
-    opacity: 0.2;
-    transform: scale(0.986);
+    opacity: 0.24;
+    transform: scale(0.99);
   }
   60% {
-    opacity: 0.7;
+    opacity: 0.64;
     transform: scale(1);
   }
   100% {
     opacity: 0.3;
-    transform: scale(0.992);
+    transform: scale(0.994);
   }
 }
 
 @keyframes traceLogoSeal {
   0% {
-    opacity: 0.18;
-    transform: scale(0.972);
+    opacity: 0.2;
+    transform: scale(0.978);
   }
   100% {
-    opacity: 0.86;
+    opacity: 0.82;
     transform: scale(1);
   }
 }
 
 @keyframes traceLogoEcho {
   0% {
-    opacity: 0.78;
+    opacity: 0.7;
     transform: scale(1);
   }
   100% {
     opacity: 0;
-    transform: scale(1.055);
+    transform: scale(1.042);
   }
 }
 
