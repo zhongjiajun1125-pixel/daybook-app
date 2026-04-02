@@ -15,7 +15,7 @@
     <link rel="icon" href="./trace-logo-black.png">
     <link rel="apple-touch-icon" href="./trace-logo-black.png">
     
-    <link rel="stylesheet" href="./styles.css?v=20260402-6" />
+    <link rel="stylesheet" href="./styles.css?v=20260402-9" />
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -40,7 +40,7 @@
         height="259"
         aria-hidden="true"
       />
-      <span id="trace-loading-label" class="trace-loading-label">正在进入…</span>
+      <span id="trace-loading-label" class="trace-loading-label">等一下…</span>
     </div>
 
     <main id="app-root" class="app-shell">
@@ -61,8 +61,8 @@
             />
             <span class="trace-wordmark trace-wordmark--identity">Trace</span>
           </div>
-          <p id="unlock-title" class="unlock-title">输入密码</p>
-          <p id="unlock-subtitle" class="unlock-subtitle">本地保护已开启</p>
+          <p id="unlock-title" class="unlock-title">从这里进去</p>
+          <p id="unlock-subtitle" class="unlock-subtitle">还是原来的地方</p>
           <div id="pin-panel" class="pin-panel">
             <input
               id="pin-input"
@@ -72,10 +72,10 @@
               pattern="[0-9]*"
               maxlength="6"
               autocomplete="off"
-              placeholder="输入 PIN"
+              placeholder="那几个数字"
             />
           </div>
-          <button id="unlock-btn" class="unlock-btn unlock-btn--primary" type="button">进入</button>
+          <button id="unlock-btn" class="unlock-btn unlock-btn--primary" type="button">进去</button>
         </div>
       </section>
 
@@ -95,7 +95,7 @@
             />
             <span class="trace-wordmark trace-wordmark--identity">Trace</span>
           </div>
-          <p id="threshold-line" class="threshold-line">先留下这一句。</p>
+          <p id="threshold-line" class="threshold-line">先停一下。</p>
           <div class="action-shell action-shell--threshold">
             <button id="enter-writing-btn" class="primary-action-btn" type="button">继续</button>
           </div>
@@ -137,28 +137,24 @@
             ></textarea>
             <div class="compose-footer">
               <span id="save-status" class="status-indicator" aria-live="polite"></span>
-              <div id="control-hub" class="control-hub" aria-label="写作控制">
-                <button
-                  id="control-entry"
-                  class="control-entry"
-                  type="button"
-                  aria-expanded="false"
-                  aria-controls="control-actions"
-                >
-                  留一下
+              <div class="voice-zone" aria-label="语音输入">
+                <button id="control-voice" class="voice-entry" type="button" aria-pressed="false">
+                  <span id="voice-entry-label" class="voice-entry-label" aria-live="polite">点一下说出来</span>
+                  <span id="voice-entry-help" class="voice-entry-help" aria-live="polite">不想打字时，也可以直接说。</span>
                 </button>
-                <div id="control-actions" class="control-actions" aria-hidden="true">
-                  <button id="control-save" class="control-action" type="button">留下</button>
+              </div>
+              <div id="control-hub" class="control-hub" aria-label="写作操作">
+                <div id="control-actions" class="control-actions control-actions--visible" aria-hidden="false">
+                  <button id="control-save" class="control-action control-action--primary" type="button">留下</button>
                   <button id="control-history" class="control-action" type="button">回看</button>
                   <button id="control-anchor" class="control-action" type="button">标一下</button>
-                  <div id="anchor-options" class="anchor-options" aria-hidden="true">
-                    <button class="anchor-option" data-anchor="焦滞" type="button">卡着</button>
-                    <button class="anchor-option" data-anchor="游离" type="button">散着</button>
-                    <button class="anchor-option" data-anchor="澄明" type="button">清一点</button>
-                    <button class="anchor-option" data-anchor="沉缩" type="button">收着</button>
-                  </div>
-                  <button id="control-voice" class="control-action" type="button">说出来</button>
                   <button id="control-dismiss" class="control-action" type="button">算了</button>
+                </div>
+                <div id="anchor-options" class="anchor-options" aria-hidden="true">
+                  <button class="anchor-option" data-anchor="焦滞" type="button">卡着</button>
+                  <button class="anchor-option" data-anchor="游离" type="button">散着</button>
+                  <button class="anchor-option" data-anchor="澄明" type="button">清一点</button>
+                  <button class="anchor-option" data-anchor="沉缩" type="button">收着</button>
                 </div>
               </div>
             </div>
@@ -212,6 +208,7 @@
           <div class="history-primary">
             <div class="history-meta">
               <time class="history-time"></time>
+              <span class="history-mode hidden"></span>
               <span class="history-metadata hidden"></span>
               <button class="history-delete-btn" type="button" aria-label="删掉这条">删掉</button>
             </div>
@@ -223,6 +220,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260402-6"></script>
+    <script src="./app.js?v=20260402-9"></script>
   </body>
 </html>

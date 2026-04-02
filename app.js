@@ -37,22 +37,22 @@ const MOTION = Object.freeze({
 
 const FIRST_TIME_ONBOARDING_STEPS = Object.freeze([
   {
-    line: "先留下这一句。",
+    line: "先停一下。",
     action: "继续",
   },
   {
-    line: "有些东西，会再回来。",
+    line: "留一句就好。",
     action: "继续",
   },
   {
-    line: "一句就够了。",
-    action: "开始",
+    line: "从这里进去。",
+    action: "进去",
   },
 ]);
 
 const RETURNING_THRESHOLD_STATE = Object.freeze({
   line: "它还在这里。",
-  action: "继续",
+  action: "进去",
 });
 
 const EXPERIENCE_STAGES = Object.freeze({
@@ -61,6 +61,12 @@ const EXPERIENCE_STAGES = Object.freeze({
   DAY_4: "day4",
   DAY_5_6: "day5_6",
   DAY_7_PLUS: "day7_plus",
+});
+
+const INPUT_MODES = Object.freeze({
+  text: "text",
+  voice: "voice",
+  mixed: "mixed",
 });
 
 const DEAD_GENERIC_ECHO_LINES = Object.freeze([
@@ -87,178 +93,178 @@ const ECHO_TONE_SEQUENCE = Object.freeze({
 const ECHO_LANGUAGE_LIBRARY = {
   circling: {
     direct: [
-      ({ topicSpot, topicMatter }) => `还是回到${topicSpot}了。`,
-      ({ topicMatter }) => `${topicMatter}，你没有真正离开。`,
-      ({ topicSpot }) => `${topicSpot}这里，你又碰到了。`,
+      ({ topicSpot }) => `又回到${topicSpot}了。`,
+      ({ topicMatter }) => `${topicMatter}还没离开。`,
+      ({ topicSpot }) => `${topicSpot}这里，又碰到了。`,
     ],
     soft: [
-      ({ topicMatter }) => `${topicMatter}又在附近了。`,
-      ({ topicSpot }) => `你又轻轻碰到了${topicSpot}。`,
-      ({ topicMatter }) => `${topicMatter}还没有退开。`,
+      ({ topicMatter }) => `${topicMatter}又在附近。`,
+      ({ topicSpot }) => `${topicSpot}这里还在。`,
+      () => "还是绕回来了。",
     ],
     residue: [
-      ({ topicMatter }) => `${topicMatter}的余波还没退下去。`,
-      ({ topicSpot }) => `${topicSpot}这个轮廓还在。`,
-      ({ topicMatter }) => `${topicMatter}还留着一点回声。`,
+      ({ topicMatter }) => `${topicMatter}还留着一点。`,
+      ({ topicSpot }) => `${topicSpot}这个影子还在。`,
+      () => "它还没退下去。",
     ],
     movement: [
-      ({ topicSpot }) => `绕了一圈，又落回${topicSpot}。`,
-      ({ topicMatter }) => `路径变了，落点还是${topicMatter}。`,
-      ({ topicSpot }) => `兜了一圈，还是回到${topicSpot}。`,
+      ({ topicSpot }) => `绕了一圈，还是${topicSpot}。`,
+      () => "走开一点，又回来了。",
+      () => "转了一下，又落在这里。",
     ],
   },
   stalled_return: {
     direct: [
-      ({ topicSpot }) => `${topicSpot}这里还是没动。`,
+      () => "差不多还在同一处。",
       () => "它回来过几次，位置没变。",
-      () => "你还停在同一个地方。",
+      () => "还是停在这里。",
     ],
     soft: [
-      () => "它一直停在差不多的地方。",
-      () => "这件事还卡在原处。",
-      () => "它还是落在同一个位置上。",
+      () => "它一直停在这里。",
+      () => "这件事还没挪开。",
+      () => "还是落在原处。",
     ],
     residue: [
-      () => "那个点一直没有退下去。",
+      () => "那个点一直没退。",
       () => "它还留在原来的位置上。",
-      () => "它没有散开，只是留着。",
+      () => "它没有散开。",
     ],
     movement: [
-      () => "回来过几次，还是停在这里。",
+      () => "回来几次，还是这里。",
       () => "走了几步，又停回原处。",
-      () => "每次回来，都差不多停在这里。",
+      () => "每次都差不多停在这儿。",
     ],
   },
   held_back: {
     direct: [
-      () => "最关键的那句还没落下来。",
-      () => "你停在要说透之前了。",
-      () => "核心就在附近，但你收住了。",
+      () => "有一句没落下来。",
+      () => "到这里又收住了。",
+      () => "最里面那句还没出来。",
     ],
     soft: [
-      () => "还有一层没有打开。",
-      () => "这句话停得有点早。",
-      () => "你已经碰到边了。",
+      () => "这里还差一点。",
+      () => "这句停得有点早。",
+      () => "碰到边上，又收住了。",
     ],
     residue: [
-      () => "有东西浮出来了一下，又退回去了。",
-      () => "那个点露了一下，又收住了。",
-      () => "快成形了，又散掉了。",
+      () => "它冒出来一下，又退了。",
+      () => "那一句露了一下。",
+      () => "快落下来了，又停住了。",
     ],
     movement: [
-      () => "你靠近了，又往后退了一步。",
-      () => "这次已经走到门口了。",
-      () => "你不是没到，只是停住了。",
+      () => "靠近了一点，又退回去。",
+      () => "走到门口，又停住了。",
+      () => "再往里一点就到了。",
     ],
   },
   almost_said: {
     direct: [
-      () => "已经碰到核心了，只差最后一句。",
-      () => "这次更像差一点就说出来。",
-      () => "最里面那层已经露头了。",
+      () => "差一点就说出来了。",
+      () => "已经碰到了边上。",
+      () => "快落下来了。",
     ],
     soft: [
-      () => "它已经快到表面了。",
-      () => "差一点就会更清楚。",
+      () => "这里已经很近了。",
+      () => "它快到表面了。",
       () => "这里已经很靠近了。",
     ],
     residue: [
-      () => "那句话已经成形了一半。",
-      () => "它已经到了边上，还没真正落下。",
+      () => "那句话已经有一点形了。",
+      () => "它已经到了边上。",
       () => "快要留下来了，又停了一下。",
     ],
     movement: [
-      () => "你已经走近了，只差最后一点。",
+      () => "这次更靠近一点。",
       () => "再往里一步，可能就到了。",
-      () => "这次不是没开始，是停在最后一小段。",
+      () => "已经走近了，还差最后一点。",
     ],
   },
   drift: {
     direct: [
-      () => "问题还在，注意力先走开了。",
-      () => "你在绕开中心。",
-      () => "这段话先往旁边散开了。",
+      () => "又从边上绕过去了。",
+      () => "重心先散开了。",
+      () => "还是没落到中间。",
     ],
     soft: [
-      () => "它有点散开了。",
-      () => "重心没有完全落下。",
-      () => "你没有停住，但也没有落下去。",
+      () => "有点往旁边去了。",
+      () => "这次先散开了。",
+      () => "它还没落稳。",
     ],
     residue: [
-      () => "中心还在，只是被拉远了一点。",
-      () => "那个点没有消失，只是变淡了。",
-      () => "它还在，只是被放到了边上。",
+      () => "那个点还在，只是远了一点。",
+      () => "它没走，只是淡了一些。",
+      () => "还在，只是放到了边上。",
     ],
     movement: [
-      () => "你先往外绕了一圈，中心还留在原地。",
-      () => "这次走得更远，但还是绕着它。",
-      () => "注意力先飘开了，问题没有跟着走。",
+      () => "先绕出去了一点。",
+      () => "走远了一点，还是牵着这里。",
+      () => "先飘开了一下。",
     ],
   },
   pre_start: {
     direct: [
       () => "还是停在开始之前。",
-      () => "你又走到门口了，但没进去。",
-      () => "事情还卡在起步前面。",
+      () => "又停在前一步了。",
+      () => "还没真正动起来。",
     ],
     soft: [
-      () => "这里又停在了要开始的时候。",
-      () => "你已经走到边上了，还没往里去。",
-      () => "它还留在开始前那一下。",
+      () => "这里又停在前面了。",
+      () => "还是差那一下。",
+      () => "又停在要开始的时候。",
     ],
     residue: [
-      () => "那个起点一直没有真正被踩下去。",
-      () => "开始的动作露出来了，还没成形。",
+      () => "那个起点还没踩下去。",
+      () => "开始那一下还没落下来。",
       () => "门口还在，你还是停在那里。",
     ],
     movement: [
-      () => "你又走到门口，然后停住了。",
-      () => "每次往前一点，还是停在开始前。",
-      () => "这条线一直把你带到门口。",
+      () => "又走到这里，然后停住了。",
+      () => "往前一点，又停在前面。",
+      () => "每次都快开始了。",
     ],
   },
   inward_pull: {
     direct: [
-      () => "这段话在往里收。",
-      () => "你在退回自己里面。",
-      () => "它没有展开，先收回去了。",
+      () => "又往里收了一点。",
+      () => "先缩回去了。",
+      () => "没有往外走。",
     ],
     soft: [
-      () => "它慢慢往里缩了一点。",
-      () => "你先把它收在里面了。",
-      () => "这次没有往外打开。",
+      () => "这次先收住了。",
+      () => "慢慢往里退了一点。",
+      () => "没有再往外打开。",
     ],
     residue: [
-      () => "外面的声响退下去了，里面还留着。",
-      () => "它收回去了，但没有过去。",
-      () => "这股力气在往里回。",
+      () => "收回去了，还没过去。",
+      () => "那股力还在往里走。",
+      () => "外面退下去了，里面还在。",
     ],
     movement: [
-      () => "它没有往前推，先往里退了。",
-      () => "你刚碰到它，又往里面缩回去。",
-      () => "这次不是展开，而是回收。",
+      () => "碰到一下，又往里退了。",
+      () => "没有往前，是先往里。",
+      () => "这次更像回收。",
     ],
   },
   quiet_weight: {
     direct: [
-      ({ emotionPhrase }) => `表面很轻，下面更像是${emotionPhrase}。`,
-      () => "这句话很安静，分量并不轻。",
-      () => "它看起来轻，里面却压着东西。",
+      () => "看着轻，分量还在。",
+      () => "声音不大，重量还在。",
+      () => "安静着，没有变轻。",
     ],
     soft: [
       () => "这里比看上去要重一点。",
-      () => "它没有很响，但也不轻。",
-      () => "这段话下面还有一层重量。",
+      () => "它不响，也不轻。",
+      () => "下面还留着一点。",
     ],
     residue: [
-      () => "安静只是表面，下面还留着分量。",
-      () => "这点安静里还压着一点东西。",
-      () => "它没有发出来，但没有散掉。",
+      () => "安静着，下面还压着。",
+      () => "没有发出来，也没散。",
+      () => "轻轻放着，分量还在。",
     ],
     movement: [
-      () => "它没有往外冲，只是在里面压着。",
-      () => "表面很平，下面还在慢慢往下沉。",
-      () => "声音不大，重量还在往下坠。",
+      () => "它没往外冲，只是压着。",
+      () => "表面很平，下面还在沉。",
+      () => "没出声，还是往下压着。",
     ],
   },
   loosening: {
@@ -286,45 +292,45 @@ const ECHO_LANGUAGE_LIBRARY = {
   time_return: {
     direct: [
       ({ timePhrase }) => `它总在${timePhrase}回来。`,
-      ({ timePhrase }) => `${timePhrase}一到，它就更靠近你。`,
-      ({ timePhrase }) => `${timePhrase}像是在替它把门打开。`,
+      ({ timePhrase }) => `${timePhrase}一到，它又回来了。`,
+      ({ timePhrase }) => `${timePhrase}里，它会更近一点。`,
     ],
     soft: [
-      ({ timePhrase }) => `有些东西总在${timePhrase}靠近。`,
-      ({ timePhrase }) => `${timePhrase}一来，这一类内容就会浮上来。`,
-      ({ timePhrase }) => `这件事和${timePhrase}有点熟。`,
+      ({ timePhrase }) => `${timePhrase}一来，它就更容易出来。`,
+      ({ timePhrase }) => `${timePhrase}总会碰到它。`,
+      ({ timePhrase }) => `${timePhrase}里更容易走到这里。`,
     ],
     residue: [
-      ({ timePhrase }) => `${timePhrase}里总留着一点它的余波。`,
-      ({ timePhrase }) => `一到${timePhrase}，它就没完全退开。`,
+      ({ timePhrase }) => `${timePhrase}里还留着它。`,
+      ({ timePhrase }) => `一到${timePhrase}，它就没退干净。`,
       ({ timePhrase }) => `${timePhrase}像是把它重新带回来。`,
     ],
     movement: [
-      ({ timePhrase }) => `每次靠近${timePhrase}，它都会往前一步。`,
+      ({ timePhrase }) => `每次到${timePhrase}，它都会近一点。`,
       ({ timePhrase }) => `${timePhrase}一到，它就顺着回来了。`,
       ({ timePhrase }) => `它总是沿着${timePhrase}这条线回来。`,
     ],
   },
   trace: {
     direct: [
-      () => "这里还没有完全落下。",
-      () => "你写到这里，又轻轻收住了。",
-      () => "这次更像是在边上停了一下。",
+      () => "这里还没落稳。",
+      () => "你在这里停了一下。",
+      () => "这次又停在这里了。",
     ],
     soft: [
-      () => "这里还留着一点没说完。",
-      () => "它落下了一些，还没全部落下。",
+      () => "这里还留着一点。",
+      () => "落下了一些，还没全落下。",
       () => "你在这里停了一下。",
     ],
     residue: [
-      () => "它已经留下一点痕迹了。",
-      () => "这里有一点余下来的东西。",
-      () => "它没有完全散掉。",
+      () => "这里留下了一点。",
+      () => "还有一点没散。",
+      () => "它还在这里。",
     ],
     movement: [
-      () => "你走到这里，先停了一下。",
-      () => "它已经动了一点，还没真正展开。",
-      () => "这句已经落下，后面还没跟上。",
+      () => "走到这里，先停了一下。",
+      () => "动了一点，还没展开。",
+      () => "落下一点，后面还没跟上。",
     ],
   },
 };
@@ -332,50 +338,50 @@ const ECHO_LANGUAGE_LIBRARY = {
 const SCHEDULED_ECHO_COMPANIONS = {
   repeat: {
     l2: [
-      () => "它不是第一次回来了。",
-      () => "绕了一圈，还是落在这里。",
-      () => "那个点一直没有退下去。",
+      () => "不是第一次了。",
+      () => "还是落在这里。",
+      () => "那个点还没退。",
     ],
     l3: [
-      () => "到这里为止，它还没有散开。",
-      () => "你一直没有离开这个位置。",
-      () => "它还留在原来的地方。",
+      () => "到现在还在这里。",
+      () => "一直没离开这一处。",
+      () => "它还是原来的位置。",
     ],
   },
   time: {
     l2: [
-      ({ timePhrase }) => `${timePhrase}像是更容易把它带回来。`,
-      ({ timePhrase }) => `一到${timePhrase}，它就更容易浮上来。`,
-      ({ timePhrase }) => `这个时段总会碰到它。`,
+      ({ timePhrase }) => `${timePhrase}一到，它就近一点。`,
+      ({ timePhrase }) => `这个时候更容易碰到它。`,
+      ({ timePhrase }) => `一到${timePhrase}，它就回来了。`,
     ],
     l3: [
-      () => "它已经不只是偶然了。",
-      () => "这条线留得比你想的更久。",
-      () => "它总会在差不多的时候回来。",
+      () => "它已经不只是一次了。",
+      () => "这条线留得更久了。",
+      () => "总会在差不多的时候回来。",
     ],
   },
   friction: {
     l2: [
-      () => "这次的停顿不是偶然。",
-      () => "你不是没话说，只是一直在收住。",
-      () => "它总停在要说透之前。",
+      () => "又停在这里了。",
+      () => "这次还是收住了。",
+      () => "还是停在要说透之前。",
     ],
     l3: [
-      () => "那个点一直没有真正落下来。",
-      () => "最里面那层还没有打开。",
-      () => "它已经到了边上，还没真正出来。",
+      () => "那个点一直没落下来。",
+      () => "最里面那句还没出来。",
+      () => "它到了边上，还没出来。",
     ],
   },
   open_loop: {
     l2: [
-      () => "它回来过几次，位置没怎么变。",
-      () => "你总会走到这里，然后停住。",
-      () => "每次都像快开始了，又收回去。",
+      () => "回来过几次，还是这里。",
+      () => "总会走到这里，然后停住。",
+      () => "又像快开始了。",
     ],
     l3: [
-      () => "到这里为止，还是没有往下走。",
-      () => "它还停在开始之前。",
-      () => "这条线一直没有真正动起来。",
+      () => "到这里还是没往下走。",
+      () => "它还停在前一步。",
+      () => "这条线还没动起来。",
     ],
   },
 };
@@ -575,7 +581,6 @@ const elements = {
   rawMemoryInput: document.getElementById("raw-memory-input"),
   saveStatus: document.getElementById("save-status"),
   controlHub: document.getElementById("control-hub"),
-  controlEntry: document.getElementById("control-entry"),
   controlActions: document.getElementById("control-actions"),
   controlSave: document.getElementById("control-save"),
   controlHistory: document.getElementById("control-history"),
@@ -583,6 +588,8 @@ const elements = {
   anchorOptions: document.getElementById("anchor-options"),
   anchorOptionButtons: document.querySelectorAll(".anchor-option"),
   controlVoice: document.getElementById("control-voice"),
+  voiceEntryLabel: document.getElementById("voice-entry-label"),
+  voiceEntryHelp: document.getElementById("voice-entry-help"),
   controlDismiss: document.getElementById("control-dismiss"),
   historyPanel: document.getElementById("history-panel"),
   historyPatternLayer: document.getElementById("history-pattern-layer"),
@@ -625,13 +632,38 @@ let state = {
   reviewToolsOpen: false,
   readingFont: window.localStorage.getItem(READING_FONT_KEY) === "serif" ? "serif" : "system",
   ambientSoundLevel: resolveAmbientSoundLevel(window.localStorage.getItem(AMBIENT_SOUND_KEY)),
+  draftModeBase: INPUT_MODES.text,
+  draftVoiceUsed: false,
+  draftRefined: false,
+  draftHadTextBeforeVoice: false,
+  pendingSubmitAfterVoice: false,
 };
 
-let implicitSession = {
-  startMs: null,
-  backspaceCount: 0,
-  hasTyped: false,
-};
+function createImplicitSession() {
+  return {
+    startMs: null,
+    firstInputMs: null,
+    lastInputMs: null,
+    inputEvents: 0,
+    pauseCount: 0,
+    longestPauseMs: 0,
+    backspaceCount: 0,
+    deleteBurstCount: 0,
+    hasTyped: false,
+    anchorTouches: 0,
+    controlTouches: 0,
+    voiceStarts: 0,
+    voiceChars: 0,
+    voiceInterruptions: 0,
+  };
+}
+
+let implicitSession = createImplicitSession();
+
+function resetImplicitSession() {
+  implicitSession = createImplicitSession();
+  noteSessionInputActivity._lastKind = "";
+}
 
 let echoCardTimer = null;
 let insightResizeTimer = null;
@@ -662,6 +694,9 @@ const health = {
 const voiceState = {
   supported: Boolean(SpeechRecognitionCtor),
   listening: false,
+  transcribing: false,
+  didCaptureFinal: false,
+  sessionChars: 0,
 };
 
 const Lexicon = {
@@ -808,14 +843,33 @@ function base64ToBytes(base64) {
 }
 
 function createPlainEntryShape(entry) {
+  const durationSec = Number.isFinite(entry.context?.durationSec) ? entry.context.durationSec : 0;
+  const behavior = normalizeBehaviorContext(entry.context?.behavior);
+  const expression = buildExpressionContext(
+    entry.content,
+    entry.metadata?.anchor,
+    behavior,
+    durationSec,
+  );
+
   return {
     id: entry.id || `mem-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     content: typeof entry.content === "string" ? entry.content : "",
+    inputMode: getEntryInputMode({
+      ...entry,
+      context: {
+        ...entry.context,
+        behavior,
+        expression,
+      },
+    }),
     timestamp: entry.timestamp || new Date().toISOString(),
     context: {
-      durationSec: Number.isFinite(entry.context?.durationSec) ? entry.context.durationSec : 0,
+      durationSec,
       friction: Number.isFinite(entry.context?.friction) ? entry.context.friction : 0,
       timePhase: entry.context?.timePhase || resolveTimePhase(new Date(entry.timestamp || Date.now())),
+      behavior,
+      expression,
     },
     tags: {
       emotion: entry.tags?.emotion || null,
@@ -896,6 +950,7 @@ async function encryptEntryRecord(entry) {
 
   return {
     id: plain.id,
+    inputMode: plain.inputMode,
     timestamp: plain.timestamp,
     context: plain.context,
     encrypted: true,
@@ -1009,6 +1064,7 @@ async function writeEntryToVault(entry) {
       "",
       entry.content || "",
       "",
+      `- 表达方式: ${getModeUiLabel(getEntryInputMode(entry))}`,
       `- 锚点: ${entry.metadata?.anchor || "未标记"}`,
       `- 时间相位: ${entry.context?.timePhase || "未知"}`,
       `- 摩擦: ${entry.context?.friction || 0}`,
@@ -1083,7 +1139,7 @@ function loadPredictionState() {
   }
 }
 
-const OBSERVATION_MODEL_VERSION = 1;
+const OBSERVATION_MODEL_VERSION = 2;
 
 const ObservationLexicon = {
   uncertainty: ["好像", "似乎", "可能", "也许", "说不上", "不知道", "大概", "仿佛", "好像也"],
@@ -1157,6 +1213,227 @@ function uniqueValues(values = []) {
   return [...new Set(values.filter(Boolean))];
 }
 
+function normalizeInputMode(mode) {
+  if (mode === INPUT_MODES.voice) return INPUT_MODES.voice;
+  if (mode === INPUT_MODES.mixed) return INPUT_MODES.mixed;
+  return INPUT_MODES.text;
+}
+
+function inferLegacyInputMode(entry) {
+  const behavior = normalizeBehaviorContext(entry?.context?.behavior);
+  const expression = normalizeExpressionContext(entry?.context?.expression);
+  const hasVoice = Boolean(
+    behavior.voiceStarts > 0
+      || behavior.voiceChars > 0
+      || expression.modes.includes("voice"),
+  );
+  const hasContent = Boolean((entry?.content || "").trim());
+  const refinedVoice = Boolean(
+    hasVoice
+      && (
+        behavior.backspaceCount >= 2
+        || behavior.deleteBurstCount >= 1
+        || behavior.inputEvents >= 10
+      ),
+  );
+
+  if (hasVoice && refinedVoice) return INPUT_MODES.mixed;
+  if (hasVoice) return INPUT_MODES.voice;
+  if (hasContent) return INPUT_MODES.text;
+  return INPUT_MODES.text;
+}
+
+function getEntryInputMode(entry) {
+  return normalizeInputMode(entry?.inputMode || inferLegacyInputMode(entry));
+}
+
+function getModeUiLabel(mode) {
+  if (mode === INPUT_MODES.voice) return "说出";
+  if (mode === INPUT_MODES.mixed) return "整理过";
+  return "写下";
+}
+
+function resetDraftInputMode(mode = INPUT_MODES.text) {
+  state.draftModeBase = normalizeInputMode(mode);
+  state.draftVoiceUsed = false;
+  state.draftRefined = false;
+  state.draftHadTextBeforeVoice = false;
+}
+
+function noteTypedDraftMutation() {
+  if (state.draftVoiceUsed || state.draftModeBase === INPUT_MODES.voice || state.draftModeBase === INPUT_MODES.mixed) {
+    state.draftRefined = true;
+  }
+}
+
+function noteVoiceDraftMutation() {
+  const currentText = (elements.rawMemoryInput?.value || "").trim();
+  if (currentText) {
+    state.draftHadTextBeforeVoice = true;
+  }
+  state.draftVoiceUsed = true;
+}
+
+function resolveDraftInputMode() {
+  if (state.draftVoiceUsed) {
+    if (state.draftHadTextBeforeVoice || state.draftRefined) {
+      return INPUT_MODES.mixed;
+    }
+    return INPUT_MODES.voice;
+  }
+
+  if (state.draftModeBase === INPUT_MODES.voice || state.draftModeBase === INPUT_MODES.mixed) {
+    return state.draftRefined ? INPUT_MODES.mixed : state.draftModeBase;
+  }
+
+  return INPUT_MODES.text;
+}
+
+function normalizeBehaviorContext(behavior = {}) {
+  return {
+    inputEvents: Number.isFinite(behavior.inputEvents) ? behavior.inputEvents : 0,
+    pauseCount: Number.isFinite(behavior.pauseCount) ? behavior.pauseCount : 0,
+    longestPauseMs: Number.isFinite(behavior.longestPauseMs) ? behavior.longestPauseMs : 0,
+    backspaceCount: Number.isFinite(behavior.backspaceCount) ? behavior.backspaceCount : 0,
+    deleteBurstCount: Number.isFinite(behavior.deleteBurstCount) ? behavior.deleteBurstCount : 0,
+    anchorTouches: Number.isFinite(behavior.anchorTouches) ? behavior.anchorTouches : 0,
+    controlTouches: Number.isFinite(behavior.controlTouches) ? behavior.controlTouches : 0,
+    voiceStarts: Number.isFinite(behavior.voiceStarts) ? behavior.voiceStarts : 0,
+    voiceChars: Number.isFinite(behavior.voiceChars) ? behavior.voiceChars : 0,
+    voiceInterruptions: Number.isFinite(behavior.voiceInterruptions) ? behavior.voiceInterruptions : 0,
+  };
+}
+
+function normalizeExpressionContext(expression = {}) {
+  const modes = uniqueValues(Array.isArray(expression.modes) ? expression.modes : []);
+  return {
+    modes,
+    silent: Boolean(expression.silent),
+    residue: Boolean(expression.residue),
+  };
+}
+
+function noteSessionStart() {
+  if (!implicitSession.startMs) {
+    implicitSession.startMs = Date.now();
+  }
+}
+
+function noteSessionInputActivity(kind = "input") {
+  const now = Date.now();
+  noteSessionStart();
+
+  if (implicitSession.lastInputMs) {
+    const gap = now - implicitSession.lastInputMs;
+    if (gap >= 2600) {
+      implicitSession.pauseCount += 1;
+      implicitSession.longestPauseMs = Math.max(implicitSession.longestPauseMs, gap);
+    }
+  }
+
+  if (!implicitSession.firstInputMs) {
+    implicitSession.firstInputMs = now;
+  }
+
+  implicitSession.lastInputMs = now;
+  implicitSession.inputEvents += 1;
+
+  if (kind === "delete") {
+    implicitSession.backspaceCount += 1;
+    if (implicitSession.inputEvents === 1 || kind !== noteSessionInputActivity._lastKind) {
+      implicitSession.deleteBurstCount += 1;
+    }
+  }
+
+  noteSessionInputActivity._lastKind = kind;
+}
+
+function noteSessionControlTouch() {
+  noteSessionStart();
+  implicitSession.controlTouches += 1;
+}
+
+function noteSessionAnchorTouch() {
+  noteSessionStart();
+  implicitSession.anchorTouches += 1;
+}
+
+function noteSessionVoiceStart() {
+  noteSessionStart();
+  implicitSession.voiceStarts += 1;
+}
+
+function noteSessionVoiceCommit(text = "") {
+  noteSessionStart();
+  const charCount = String(text || "").replace(/\s+/g, "").length;
+  implicitSession.voiceChars += charCount;
+}
+
+function noteSessionVoiceInterruption() {
+  noteSessionStart();
+  implicitSession.voiceInterruptions += 1;
+}
+
+function buildExpressionContext(content, anchor, behavior, durationSec) {
+  const text = (content || "").trim();
+  const normalizedBehavior = normalizeBehaviorContext(behavior);
+  const modes = [];
+
+  if (text) modes.push("text");
+  if (anchor || normalizedBehavior.anchorTouches > 0) modes.push("anchor");
+  if (normalizedBehavior.voiceStarts > 0 || normalizedBehavior.voiceChars > 0) modes.push("voice");
+
+  const residueSignal = Boolean(
+    normalizedBehavior.backspaceCount >= 2
+      || normalizedBehavior.pauseCount >= 1
+      || normalizedBehavior.voiceInterruptions > 0
+      || normalizedBehavior.deleteBurstCount >= 1,
+  );
+
+  if (residueSignal) modes.push("residue");
+
+  const silentSignal = !text && !anchor && Boolean(
+    residueSignal
+      || normalizedBehavior.voiceStarts > 0
+      || durationSec >= 24
+      || normalizedBehavior.controlTouches >= 2,
+  );
+
+  if (silentSignal) modes.push("silence");
+
+  return normalizeExpressionContext({
+    modes,
+    silent: silentSignal,
+    residue: residueSignal,
+  });
+}
+
+function hasExpressiveSignal(content, anchor, behavior, durationSec) {
+  const text = (content || "").trim();
+  if (text || anchor) return true;
+
+  const normalizedBehavior = normalizeBehaviorContext(behavior);
+  return Boolean(
+    normalizedBehavior.voiceChars > 0
+      || normalizedBehavior.voiceInterruptions > 0
+      || normalizedBehavior.backspaceCount >= 2
+      || normalizedBehavior.pauseCount >= 1
+      || normalizedBehavior.anchorTouches > 0
+      || durationSec >= 24,
+  );
+}
+
+function resolveHistoryPlaceholder(entry) {
+  const expression = entry?.context?.expression || {};
+  const modes = expression.modes || [];
+
+  if (modes.includes("voice") && modes.includes("residue")) return "说到这里，又停住了。";
+  if (modes.includes("anchor") && !entry?.content) return "先标在这里。";
+  if (modes.includes("residue")) return "停在这里了。";
+  if (modes.includes("silence")) return "没有写出来。";
+  return "没有写出来。";
+}
+
 function findRepeatedNarrativeFragment(units = []) {
   const normalized = units
     .map((unit) => unit.replace(/\s+/g, "").trim())
@@ -1209,6 +1486,8 @@ function pushObservationSignal(target, config) {
 
 function profileEntryForObservation(entry) {
   const text = (entry?.content || "").trim();
+  const behavior = normalizeBehaviorContext(entry?.context?.behavior);
+  const expression = normalizeExpressionContext(entry?.context?.expression);
   const units = splitNarrativeUnits(text);
   const charCount = text.replace(/\s+/g, "").length;
   const unitLengths = units.map((unit) => unit.length);
@@ -1254,6 +1533,7 @@ function profileEntryForObservation(entry) {
     id: entry.id,
     timestampMs: new Date(entry.timestamp).getTime(),
     text,
+    inputMode: getEntryInputMode(entry),
     units,
     charCount,
     unitCount: units.length,
@@ -1289,6 +1569,8 @@ function profileEntryForObservation(entry) {
     friction: entry.context?.friction || 0,
     durationSec: entry.context?.durationSec || 0,
     timePhase: entry.context?.timePhase || resolveTimePhase(new Date(entry.timestamp || Date.now())),
+    behavior,
+    expression,
     coherenceScore,
   };
 }
@@ -1497,6 +1779,42 @@ const ObservationEngine = {
       mode: "direct",
       evidence: profile.concretenessHits,
     });
+    pushObservationSignal(signals, {
+      key: "deletion_residue",
+      layer: "language_form",
+      score: clamp01((profile.behavior.backspaceCount / 10) + (profile.behavior.deleteBurstCount / 4)),
+      source: "typing",
+      horizon: "short",
+      mode: "direct",
+      evidence: [`delete:${profile.behavior.backspaceCount}`, `burst:${profile.behavior.deleteBurstCount}`],
+    });
+    pushObservationSignal(signals, {
+      key: "pause_residue",
+      layer: "language_form",
+      score: clamp01((profile.behavior.pauseCount / 3) + (profile.behavior.longestPauseMs / 18000)),
+      source: "timing",
+      horizon: "short",
+      mode: "direct",
+      evidence: [`pause:${profile.behavior.pauseCount}`, `longest:${Math.round(profile.behavior.longestPauseMs / 1000)}s`],
+    });
+    pushObservationSignal(signals, {
+      key: "voice_interruption",
+      layer: "language_form",
+      score: clamp01((profile.behavior.voiceInterruptions / 2) + (profile.behavior.voiceStarts > 0 && profile.behavior.voiceChars === 0 ? 0.34 : 0)),
+      source: "voice",
+      horizon: "short",
+      mode: "inferred",
+      evidence: [`voice:${profile.behavior.voiceStarts}`, `cut:${profile.behavior.voiceInterruptions}`],
+    });
+    pushObservationSignal(signals, {
+      key: "silent_expression",
+      layer: "language_form",
+      score: profile.expression.silent ? clamp01(0.44 + (profile.behavior.pauseCount * 0.12) + (profile.behavior.voiceInterruptions * 0.16)) : 0,
+      source: "behavior",
+      horizon: "short",
+      mode: "inferred",
+      evidence: profile.expression.modes,
+    });
 
     return {
       metrics: {
@@ -1513,6 +1831,15 @@ const ObservationEngine = {
         dominantTopic: profile.topics[0] || "",
         dominantDefense: profile.defense,
         abstractionBias: Number(abstractionBias.toFixed(3)),
+      },
+      behavior: {
+        inputEvents: profile.behavior.inputEvents,
+        pauseCount: profile.behavior.pauseCount,
+        longestPauseMs: profile.behavior.longestPauseMs,
+        backspaceCount: profile.behavior.backspaceCount,
+        voiceStarts: profile.behavior.voiceStarts,
+        voiceInterruptions: profile.behavior.voiceInterruptions,
+        expressionModes: profile.expression.modes,
       },
       signals,
     };
@@ -1540,6 +1867,9 @@ const ObservationEngine = {
     const samePhaseCount = profiles.slice(0, 12).filter((profile) => profile.timePhase === currentTimePhase).length;
     const gapBuckets = gapsHours.map((gap) => Math.round(gap / 12) * 12).filter((gap) => gap > 0);
     const recurringGap = findMostFrequent(gapBuckets) || null;
+    const recentPauseDensity = averageNumbers(profiles.slice(0, 8).map((profile) => profile.behavior.pauseCount));
+    const recentDeletionDensity = averageNumbers(profiles.slice(0, 8).map((profile) => profile.behavior.backspaceCount));
+    const recentVoiceInterruptions = averageNumbers(profiles.slice(0, 8).map((profile) => profile.behavior.voiceInterruptions));
 
     pushObservationSignal(signals, {
       key: "sudden_stop",
@@ -1612,6 +1942,33 @@ const ObservationEngine = {
       mode: "inferred",
       evidence: context.currentProfile.topics.slice(0, 2),
     });
+    pushObservationSignal(signals, {
+      key: "pause_pattern",
+      layer: "time_behavior",
+      score: clamp01((recentPauseDensity / 3) + (context.currentProfile.behavior.pauseCount / 4)),
+      source: "behavior",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [`pause:${context.currentProfile.behavior.pauseCount}`],
+    });
+    pushObservationSignal(signals, {
+      key: "deletion_pattern",
+      layer: "time_behavior",
+      score: clamp01((recentDeletionDensity / 10) + (context.currentProfile.behavior.backspaceCount / 12)),
+      source: "behavior",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [`delete:${context.currentProfile.behavior.backspaceCount}`],
+    });
+    pushObservationSignal(signals, {
+      key: "voice_interruption_pattern",
+      layer: "time_behavior",
+      score: clamp01((recentVoiceInterruptions / 2) + (context.currentProfile.behavior.voiceInterruptions / 2)),
+      source: "voice",
+      horizon: "mid",
+      mode: "inferred",
+      evidence: [`voice-cut:${context.currentProfile.behavior.voiceInterruptions}`],
+    });
 
     return {
       metrics: {
@@ -1623,6 +1980,8 @@ const ObservationEngine = {
         irregularity: Number(irregularity.toFixed(3)),
         samePhaseCount,
         recurringGapHours: recurringGap || 0,
+        recentPauseDensity: Number(recentPauseDensity.toFixed(3)),
+        recentDeletionDensity: Number(recentDeletionDensity.toFixed(3)),
       },
       signals,
     };
@@ -1905,13 +2264,16 @@ const ObservationEngine = {
       + (profile.avoidanceHits.length * 0.16)
       + (profile.minimizationHits.length * 0.14)
       + (profile.unfinishedTail ? 0.22 : 0)
-      + (profile.friction >= 8 ? 0.18 : 0),
+      + (profile.friction >= 8 ? 0.18 : 0)
+      + (profile.behavior.pauseCount * 0.08)
+      + (profile.behavior.voiceInterruptions * 0.16),
     );
     const suppressionScore = clamp01(
       (profile.suppressionHits.length * 0.22)
       + (profile.minimizationHits.length * 0.16)
       + (profile.emotion === "平静" && profile.friction >= 8 ? 0.24 : 0)
-      + (profile.charCount <= 24 && profile.friction >= 8 ? 0.16 : 0),
+      + (profile.charCount <= 24 && profile.friction >= 8 ? 0.16 : 0)
+      + (profile.expression.silent ? 0.18 : 0),
     );
     const ruminationScore = clamp01(
       ((trajectory.signals.find((signal) => signal.key === "looping")?.score || 0) * 0.55)
@@ -2073,6 +2435,13 @@ const ObservationEngine = {
     const identityPressureCount = previousProfiles.filter((profile) =>
       profile.topics.includes("身份感") || profile.identityPerformanceHits.length > 0,
     ).length;
+    const dominantTimePhase = findMostFrequent(previousProfiles.slice(0, 12).map((profile) => profile.timePhase).filter(Boolean)) || "";
+    const habitShiftScore = dominantTimePhase && context.currentProfile.timePhase && dominantTimePhase !== context.currentProfile.timePhase
+      ? clamp01((previousProfiles.filter((profile) => profile.timePhase === dominantTimePhase).length / 8) + 0.18)
+      : 0;
+    const missingPatternScore = repeatedThemeCount >= 4 && repeatedTheme && !context.currentProfile.topics.includes(repeatedTheme)
+      ? clamp01((repeatedThemeCount / 8) + (timeBehavior.signals.find((signal) => signal.key === "silence_gap")?.score || 0) * 0.22)
+      : 0;
     const unresolvedReturnScore = clamp01(
       ((repeatedThemeCount >= 3 ? repeatedThemeCount / 6 : 0) * 0.44)
       + ((psychologicalDynamic.signals.find((signal) => signal.key === "rumination_looping")?.score || 0) * 0.26)
@@ -2139,6 +2508,24 @@ const ObservationEngine = {
       evidence: identityPressureCount ? [`count:${identityPressureCount}`] : [],
     });
     pushObservationSignal(signals, {
+      key: "habit_shift",
+      layer: "longitudinal_memory",
+      score: habitShiftScore,
+      source: "cross_entry",
+      horizon: "long",
+      mode: "inferred",
+      evidence: dominantTimePhase ? [`from:${dominantTimePhase}`, `now:${context.currentProfile.timePhase}`] : [],
+    });
+    pushObservationSignal(signals, {
+      key: "missing_pattern",
+      layer: "longitudinal_memory",
+      score: missingPatternScore,
+      source: "cross_entry",
+      horizon: "long",
+      mode: "inferred",
+      evidence: repeatedTheme ? [repeatedTheme] : [],
+    });
+    pushObservationSignal(signals, {
       key: "unresolved_return",
       layer: "longitudinal_memory",
       score: unresolvedReturnScore,
@@ -2153,6 +2540,7 @@ const ObservationEngine = {
         repeatedTheme,
         recurringClass,
         emotionalClimate,
+        dominantTimePhase,
       },
       signals,
     };
@@ -2263,6 +2651,7 @@ const ObservationEngine = {
     addClass("collapse_risk", averageNumbers([
       layers.trajectory.signals.find((signal) => signal.key === "collapse_motion")?.score || 0,
       layers.timeBehavior.signals.find((signal) => signal.key === "silence_gap")?.score || 0,
+      layers.timeBehavior.signals.find((signal) => signal.key === "pause_pattern")?.score || 0,
     ]), ["collapse_motion", "silence_gap"]);
     addClass("avoidance", averageNumbers([
       layers.languageForm.signals.find((signal) => signal.key === "avoidance_language")?.score || 0,
@@ -2306,7 +2695,9 @@ const ObservationEngine = {
     addClass("held_back_core", averageNumbers([
       layers.psychologicalDynamic.signals.find((signal) => signal.key === "said_avoided_tension")?.score || 0,
       layers.psychologicalDynamic.signals.find((signal) => signal.key === "suppression_holding_back")?.score || 0,
-    ]), ["said_avoided_tension", "suppression_holding_back"]);
+      layers.languageForm.signals.find((signal) => signal.key === "pause_residue")?.score || 0,
+      layers.languageForm.signals.find((signal) => signal.key === "voice_interruption")?.score || 0,
+    ]), ["said_avoided_tension", "suppression_holding_back", "pause_residue"]);
     addClass("night_return", averageNumbers([
       layers.timeBehavior.signals.find((signal) => signal.key === "time_phase_return")?.score || 0,
       context.currentProfile.timePhase === "深夜" ? 0.3 : 0,
@@ -2314,7 +2705,9 @@ const ObservationEngine = {
     addClass("silence_after_activation", averageNumbers([
       layers.timeBehavior.signals.find((signal) => signal.key === "silence_gap")?.score || 0,
       layers.timeBehavior.signals.find((signal) => signal.key === "sudden_stop")?.score || 0,
-    ]), ["silence_gap", "sudden_stop"]);
+      layers.timeBehavior.signals.find((signal) => signal.key === "voice_interruption_pattern")?.score || 0,
+      layers.languageForm.signals.find((signal) => signal.key === "silent_expression")?.score || 0,
+    ]), ["silence_gap", "sudden_stop", "silent_expression"]);
     addClass("burst_release", averageNumbers([
       layers.timeBehavior.signals.find((signal) => signal.key === "burst_writing")?.score || 0,
       layers.trajectory.signals.find((signal) => signal.key === "release")?.score || 0,
@@ -2358,6 +2751,17 @@ const ObservationEngine = {
       : (primary?.score || 0) >= 0.76
         ? "sharp"
         : "soft";
+    let climate = "light";
+
+    if (primary && ["withdrawal", "emotional_compression", "collapse_risk", "silence_after_activation", "tension_accumulation"].includes(primary.key)) {
+      climate = "heavy";
+    } else if (primary && ["held_back_core", "unfinished_meaning", "pre_start_loop", "looping", "self_contradiction"].includes(primary.key)) {
+      climate = "tight";
+    } else if (primary && ["drift", "fragmentation", "narrative_drift", "coherence_breaking"].includes(primary.key)) {
+      climate = "loose";
+    } else if (primary && ["fragile_loosening", "integration_attempt", "recovery_direction", "temporary_stabilization", "coherence_forming"].includes(primary.key)) {
+      climate = "light";
+    }
 
     return {
       echo: {
@@ -2385,6 +2789,9 @@ const ObservationEngine = {
         classScore: primary?.score || 0,
         quietWeight: primary?.score ? Number(Math.max(primary.score - 0.12, 0).toFixed(3)) : 0,
       },
+      ambient: {
+        climate,
+      },
     };
   },
 };
@@ -2394,8 +2801,10 @@ const AIEngine = {
     return {
       system_prompt: SYSTEM_PROMPT_V1,
       current_entry: currentEntry.content,
+      current_entry_mode: getEntryInputMode(currentEntry),
       current_anchor: currentEntry.metadata?.anchor || "",
       recent_entries: memoryContext.shortWindow.map((entry) => entry.content || "[空白记录]"),
+      recent_entry_modes: memoryContext.shortWindow.map((entry) => getEntryInputMode(entry)),
       active_patterns: memoryContext.activePatterns,
       open_loops: memoryContext.openLoops,
       signals: currentEntry.context,
@@ -2446,6 +2855,7 @@ const AIEngine = {
       observation_secondary_class: observation?.outputReadiness?.echo?.secondaryClass || "",
       observation_classes: observation?.classes?.slice(0, 6).map((item) => item.key) || [],
       observation_confidence: observation?.inference?.confidenceBand || 0,
+      observation_climate: observation?.outputReadiness?.ambient?.climate || "light",
     };
     const shouldEcho =
       observation?.outputReadiness?.echo?.mode !== "silent"
@@ -2464,27 +2874,12 @@ const AIEngine = {
   },
 
   composeResponse(interpretation, memory, entry) {
-    if (!interpretation.should_echo) {
-      return {
-        echo: buildFallbackEcho(interpretation, memory, entry),
-        question: "",
-        pattern_hint: "",
-      };
-    }
-
-    const echo = buildAnalysisEcho(interpretation, memory, entry);
-    const question = shouldAskEchoQuestion(entry, interpretation, memory)
-      ? buildAnalysisQuestion(interpretation, memory)
-      : "";
-    const patternHint =
-      !question && interpretation.pattern_link && interpretation.confidence >= 0.66
-        ? buildPatternHint(interpretation, memory, entry, echo)
-        : "";
-
     return {
-      echo,
-      question,
-      pattern_hint: patternHint,
+      echo: interpretation.should_echo
+        ? buildAnalysisEcho(interpretation, memory, entry)
+        : buildFallbackEcho(interpretation, memory, entry),
+      question: "",
+      pattern_hint: "",
     };
   },
 };
@@ -2667,6 +3062,7 @@ function deriveEchoFamily(entry, interpretation, memory) {
 
 function deriveEchoTone(entry, interpretation, family) {
   const primaryClass = interpretation.observation_primary_class || interpretation.observation_classes?.[0] || "";
+  const climate = interpretation.observation_climate || "light";
 
   if (["held_back_core", "unfinished_meaning", "self_contradiction"].includes(primaryClass)) {
     return "direct";
@@ -2680,6 +3076,11 @@ function deriveEchoTone(entry, interpretation, family) {
   if (["withdrawal", "emotional_compression", "silence_after_activation"].includes(primaryClass)) {
     return "residue";
   }
+
+  if (climate === "heavy") return "residue";
+  if (climate === "tight" && ["trace", "held_back", "almost_said"].includes(family)) return "movement";
+  if (climate === "loose" && family !== "pre_start") return "soft";
+  if (climate === "light" && ["quiet_weight", "trace"].includes(family)) return "movement";
 
   if (family === "pre_start") return "movement";
   if (family === "held_back") return entry.context?.friction >= 10 ? "direct" : "movement";
@@ -2734,7 +3135,40 @@ function generateEchoSentence(entry, interpretation, memory, overrides = {}) {
   const candidates = buildEchoCandidates(family, tone, context);
   return chooseEchoCandidate(candidates, context, recentFingerprints)
     || chooseEchoCandidate(buildEchoCandidates("trace", "soft", context), context, recentFingerprints)
-    || "这里还没有完全落下。";
+    || "还没落稳。";
+}
+
+function buildModeContrastEcho(entry, entries = state.entries) {
+  const currentMode = getEntryInputMode(entry);
+  const recentModes = entries
+    .filter((item) => item?.id !== entry.id)
+    .slice(0, 6)
+    .map((item) => getEntryInputMode(item))
+    .filter((mode) => mode === INPUT_MODES.text || mode === INPUT_MODES.voice);
+
+  if (!recentModes.length || ![INPUT_MODES.text, INPUT_MODES.voice].includes(currentMode)) {
+    return "";
+  }
+
+  const lastMode = recentModes[0];
+  const modeSet = uniqueValues(recentModes);
+  if (!modeSet.includes(currentMode) || modeSet.length < 2) {
+    return "";
+  }
+
+  if (currentMode === INPUT_MODES.text && lastMode === INPUT_MODES.voice) {
+    return "写下来的你，很稳。";
+  }
+
+  if (currentMode === INPUT_MODES.voice && lastMode === INPUT_MODES.text) {
+    return "刚才说的，急一点。";
+  }
+
+  if (recentModes.includes(INPUT_MODES.text) && recentModes.includes(INPUT_MODES.voice)) {
+    return "不是同一个状态。";
+  }
+
+  return "";
 }
 
 function buildPatternHint(interpretation, memory, entry, leadEcho = "") {
@@ -2854,7 +3288,7 @@ async function bootSystem() {
   } catch (error) {
     health.lastError = error instanceof Error ? error.message : String(error);
     if (elements.unlockBtn) {
-      elements.unlockBtn.textContent = "打开失败";
+      elements.unlockBtn.textContent = "进去";
     }
   }
 }
@@ -2882,7 +3316,7 @@ async function startTraceRuntime() {
     health.lastError = error instanceof Error ? error.message : String(error);
     if (shouldRequireUnlock()) {
       showView("unlock");
-      renderAccessView("failed", "打开失败");
+      renderAccessView("failed", "刚刚没进去");
       return;
     }
     showView("onboarding");
@@ -2897,7 +3331,10 @@ function updateHomepageState(hasEntries) {
 
 function getThresholdState() {
   if (!state.isFirstTimeUser) {
-    return RETURNING_THRESHOLD_STATE;
+    return {
+      ...RETURNING_THRESHOLD_STATE,
+      line: buildPeriodicThresholdLine(state.entries),
+    };
   }
 
   return FIRST_TIME_ONBOARDING_STEPS[state.onboardingStep] || FIRST_TIME_ONBOARDING_STEPS[0];
@@ -2980,25 +3417,62 @@ function setStatusMessage(text = "", timeout = 0) {
   }
 }
 
-function syncControlHub() {
-  if (!elements.controlHub || !elements.controlEntry || !elements.controlActions) return;
+function syncExpressiveModeState() {
+  const liveVoiceMode = voiceState.listening || voiceState.transcribing;
+  document.body.classList.toggle("listening-mode", liveVoiceMode);
+  document.body.classList.toggle("spoken-mode", liveVoiceMode);
+  document.body.dataset.inputMode = liveVoiceMode ? INPUT_MODES.voice : INPUT_MODES.text;
+}
 
-  elements.controlHub.classList.toggle("is-open", state.controlHubOpen);
+function resolveVoiceEntryCopy() {
+  if (voiceState.transcribing) {
+    return {
+      label: "刚才那句，正在变成字",
+      help: "等一下。",
+      pressed: true,
+    };
+  }
+
+  if (voiceState.listening) {
+    return {
+      label: "正在听，点一下停住",
+      help: "现在先说出来。",
+      pressed: true,
+    };
+  }
+
+  return {
+    label: "点一下说出来",
+    help: "不想打字时，也可以直接说。",
+    pressed: false,
+  };
+}
+
+function syncControlHub() {
+  if (!elements.controlHub || !elements.controlActions) return;
+
   elements.controlHub.classList.toggle("is-marking", state.anchorPickerOpen);
-  elements.controlEntry.setAttribute("aria-expanded", String(state.controlHubOpen));
-  elements.controlActions.setAttribute("aria-hidden", String(!state.controlHubOpen));
+  elements.controlActions.setAttribute("aria-hidden", "false");
 
   if (elements.anchorOptions) {
     elements.anchorOptions.setAttribute("aria-hidden", String(!state.anchorPickerOpen));
   }
 
-  if (elements.controlVoice) {
-    elements.controlVoice.textContent = voiceState.listening ? "先停一下" : "说出来";
+  if (elements.controlVoice && elements.voiceEntryLabel && elements.voiceEntryHelp) {
+    const voiceCopy = resolveVoiceEntryCopy();
+    elements.controlVoice.setAttribute("aria-pressed", String(voiceCopy.pressed));
+    elements.controlVoice.dataset.state = voiceState.transcribing
+      ? "transcribing"
+      : (voiceState.listening ? "listening" : "idle");
+    elements.voiceEntryLabel.textContent = voiceCopy.label;
+    elements.voiceEntryHelp.textContent = voiceCopy.help;
   }
 
   elements.anchorOptionButtons.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.anchor === state.activeAnchor);
   });
+
+  syncExpressiveModeState();
 }
 
 function syncReviewTools() {
@@ -3053,6 +3527,7 @@ function setAnchorPickerOpen(open) {
 }
 
 function toggleAnchor(anchor) {
+  noteSessionAnchorTouch();
   state.activeAnchor = state.activeAnchor === anchor ? null : anchor;
   setAnchorPickerOpen(false);
   setControlHubOpen(false);
@@ -3065,6 +3540,7 @@ function clearCurrentDraft() {
     stopVoiceCapture({ silent: true });
   }
 
+  state.pendingSubmitAfterVoice = false;
   resetComposeState();
   hideEchoCard(true);
   setStatusMessage("", 0);
@@ -3201,6 +3677,7 @@ function clearAmbientTimers() {
 function getAmbientPresenceProfile() {
   const level = state.ambientSoundLevel;
   const composeHidden = elements.composeView?.classList.contains("hidden");
+  const climate = deriveSystemClimate();
 
   if (level === AMBIENT_SOUND_LEVELS.off || document.hidden || (composeHidden && !state.historyOpen)) {
     return {
@@ -3226,14 +3703,35 @@ function getAmbientPresenceProfile() {
     intensity *= 0.94;
   }
 
+  let baseFrequency = state.historyOpen ? 1520 : 1960;
+  let envFrequency = state.historyOpen
+    ? 410
+    : ((state.controlHubOpen || state.anchorPickerOpen) ? 560 : 710);
+
+  if (climate === "heavy") {
+    intensity *= 1.08;
+    baseFrequency *= 0.86;
+    envFrequency *= 0.82;
+  } else if (climate === "tight") {
+    intensity *= 1.04;
+    baseFrequency *= 0.92;
+    envFrequency *= 0.9;
+  } else if (climate === "loose") {
+    intensity *= 0.96;
+    baseFrequency *= 1.06;
+    envFrequency *= 1.12;
+  } else if (climate === "light") {
+    intensity *= 0.92;
+    baseFrequency *= 1.02;
+    envFrequency *= 1.05;
+  }
+
   return {
     master: (level === AMBIENT_SOUND_LEVELS.deep ? 0.0038 : 0.0026) * intensity,
     baseGain: state.historyOpen ? 0.54 : 0.46,
     envGain: state.historyOpen ? 0.42 : 0.3,
-    baseFrequency: state.historyOpen ? 1520 : 1960,
-    envFrequency: state.historyOpen
-      ? 410
-      : ((state.controlHubOpen || state.anchorPickerOpen) ? 560 : 710),
+    baseFrequency,
+    envFrequency,
     occasionalPeak: (level === AMBIENT_SOUND_LEVELS.deep ? 0.24 : 0.16) * (state.historyOpen ? 1.12 : 1),
   };
 }
@@ -3544,6 +4042,109 @@ function getExperienceProgression(currentEntry, entries = state.entries) {
   };
 }
 
+function getCurrentProgression(entries = state.entries) {
+  if (!entries?.length) {
+    return {
+      activeDays: 0,
+      currentDayIndex: 0,
+      stage: EXPERIENCE_STAGES.DAY_1_2,
+    };
+  }
+
+  return getExperienceProgression(entries[0], entries);
+}
+
+function deriveSystemClimate(entries = state.entries) {
+  const latest = entries?.[0];
+  const observationClimate = latest?.analysis?.observation?.outputReadiness?.ambient?.climate;
+  if (observationClimate) return observationClimate;
+
+  const primaryClass = latest?.analysis?.observation?.outputReadiness?.echo?.primaryClass || "";
+  if (["withdrawal", "emotional_compression", "collapse_risk", "silence_after_activation", "tension_accumulation"].includes(primaryClass)) {
+    return "heavy";
+  }
+  if (["held_back_core", "unfinished_meaning", "pre_start_loop", "looping", "self_contradiction"].includes(primaryClass)) {
+    return "tight";
+  }
+  if (["drift", "fragmentation", "narrative_drift", "coherence_breaking"].includes(primaryClass)) {
+    return "loose";
+  }
+  if (["fragile_loosening", "integration_attempt", "recovery_direction", "temporary_stabilization", "coherence_forming"].includes(primaryClass)) {
+    return "light";
+  }
+
+  const friction = latest?.context?.friction || 0;
+  const anchor = latest?.metadata?.anchor || "";
+  if (anchor === "沉缩" || friction >= 12) return "heavy";
+  if (anchor === "焦滞" || friction >= 8) return "tight";
+  if (anchor === "游离") return "loose";
+  return "light";
+}
+
+function buildPeriodicThresholdLine(entries = state.entries) {
+  const progression = getCurrentProgression(entries);
+  const latest = entries?.[0];
+  const primaryClass = latest?.analysis?.observation?.outputReadiness?.continuity?.threadClass
+    || latest?.analysis?.observation?.outputReadiness?.echo?.primaryClass
+    || "";
+  const climate = deriveSystemClimate(entries);
+
+  if (!entries?.length || progression.stage === EXPERIENCE_STAGES.DAY_1_2 || progression.stage === EXPERIENCE_STAGES.DAY_4) {
+    return RETURNING_THRESHOLD_STATE.line;
+  }
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_3) {
+    if (["looping", "unresolved_return", "night_return"].includes(primaryClass)) return "有些东西又回来了。";
+    if (["held_back_core", "unfinished_meaning"].includes(primaryClass)) return "有句话还停在里面。";
+    if (primaryClass === "pre_start_loop") return "还是在开始前。";
+    return "这里开始有点对了。";
+  }
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_5_6) {
+    if (["looping", "unresolved_return"].includes(primaryClass)) return "最近还是会回到这里。";
+    if (["held_back_core", "unfinished_meaning"].includes(primaryClass)) return "最近总停在半句里。";
+    if (primaryClass === "pre_start_loop") return "最近总在前一步停住。";
+    if (["fragile_loosening", "recovery_direction", "integration_attempt"].includes(primaryClass)) return "最近慢慢松了一点。";
+    if (climate === "heavy") return "最近有些东西一直压着。";
+    if (climate === "loose") return "最近还没完全落稳。";
+    return "最近有些线开始露出来了。";
+  }
+
+  if (["looping", "unresolved_return"].includes(primaryClass)) return "还是会回到差不多的地方。";
+  if (["held_back_core", "unfinished_meaning"].includes(primaryClass)) return "还是会停在要说透之前。";
+  if (primaryClass === "pre_start_loop") return "有些事一直停在前一步。";
+  if (["fragile_loosening", "recovery_direction", "integration_attempt"].includes(primaryClass)) return "有些地方已经慢慢松了。";
+  if (climate === "heavy") return "有些重量一直没退下去。";
+  if (climate === "tight") return "有些线一直绷着。";
+  return "这里慢慢能看出一些方向了。";
+}
+
+function shouldSurfaceDelayedEcho(entries = state.entries, pendingEcho = state.pendingEcho) {
+  if (!pendingEcho || !entries?.length) return false;
+  const progression = getCurrentProgression(entries);
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_1_2) return false;
+  if (progression.stage === EXPERIENCE_STAGES.DAY_4) return false;
+  if (progression.stage === EXPERIENCE_STAGES.DAY_3) return (pendingEcho.level || 0) >= 2;
+  return true;
+}
+
+function buildHistorySecondarySummary(entry) {
+  const progression = getCurrentProgression(state.entries);
+  if (progression.stage === EXPERIENCE_STAGES.DAY_1_2 || progression.stage === EXPERIENCE_STAGES.DAY_4) {
+    return "";
+  }
+
+  const candidates = [
+    entry.system?.flashback,
+    entry.system?.echo?.l3,
+    entry.system?.echo?.l2,
+  ].filter(Boolean);
+
+  const pick = candidates.find((text) => !isDeadGenericEchoText(text));
+  return pick ? summarizeHistoryEcho([pick]) : "";
+}
+
 function hasMeaningfulEchoSignal(entry) {
   const interpretation = entry.analysis?.interpretation || {};
   const observation = entry.analysis?.observation;
@@ -3641,7 +4242,7 @@ function animateTraceMark(node, mode, duration = 1000) {
   }
 }
 
-function setTraceLoading(active, label = "正在进入…") {
+function setTraceLoading(active, label = "等一下…") {
   if (!elements.traceLoading) return;
 
   if (elements.traceLoadingLabel) {
@@ -3680,18 +4281,26 @@ function insertTextAtCursor(text) {
 }
 
 function stopVoiceCapture({ silent = false } = {}) {
-  if (!recognition || !voiceState.listening) {
+  if (!recognition || (!voiceState.listening && !voiceState.transcribing)) {
     voiceState.listening = false;
-    document.body.classList.remove("listening-mode");
+    voiceState.transcribing = false;
+    voiceState.didCaptureFinal = false;
+    voiceState.sessionChars = 0;
     syncControlHub();
     syncAmbientPresence({ immediate: true });
     return;
   }
 
+  if (voiceState.sessionChars === 0) {
+    noteSessionVoiceInterruption();
+  }
+
   voiceState.listening = false;
+  voiceState.transcribing = voiceState.sessionChars > 0;
   recognition.stop();
-  document.body.classList.remove("listening-mode");
-  if (!silent) {
+  if (!silent && voiceState.transcribing) {
+    setStatusMessage("正在变成字…", 0);
+  } else if (!silent) {
     setStatusMessage("先停一下", 1200);
   }
   syncControlHub();
@@ -3710,8 +4319,11 @@ function initVoiceRecognition() {
   recognition.maxAlternatives = 1;
 
   recognition.onstart = () => {
+    noteSessionVoiceStart();
     voiceState.listening = true;
-    document.body.classList.add("listening-mode");
+    voiceState.transcribing = false;
+    voiceState.didCaptureFinal = false;
+    voiceState.sessionChars = 0;
     setStatusMessage("在听", 0);
     syncControlHub();
     noteAmbientActivity();
@@ -3731,14 +4343,22 @@ function initVoiceRecognition() {
     }
 
     if (finalTranscript) {
+      noteVoiceDraftMutation();
+      noteSessionVoiceCommit(finalTranscript);
+      voiceState.didCaptureFinal = true;
+      voiceState.sessionChars += finalTranscript.replace(/\s+/g, "").length;
       insertTextAtCursor(finalTranscript);
-      setStatusMessage("已经记下了", 1400);
+      voiceState.transcribing = false;
+      setStatusMessage("刚才说的，记下了", 1400);
+      syncControlHub();
     }
   };
 
   recognition.onerror = (event) => {
     voiceState.listening = false;
-    document.body.classList.remove("listening-mode");
+    voiceState.transcribing = false;
+    voiceState.didCaptureFinal = false;
+    voiceState.sessionChars = 0;
 
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       setStatusMessage("这里还不能直接说", 1800);
@@ -3748,6 +4368,7 @@ function initVoiceRecognition() {
     }
 
     if (event.error === "no-speech") {
+      noteSessionVoiceInterruption();
       setStatusMessage("刚刚没听清", 1400);
       syncControlHub();
       syncAmbientPresence({ immediate: true });
@@ -3755,9 +4376,11 @@ function initVoiceRecognition() {
     }
 
     if (event.error === "aborted") {
+      state.pendingSubmitAfterVoice = false;
       return;
     }
 
+    state.pendingSubmitAfterVoice = false;
     setStatusMessage("这里还不能直接说", 1800);
     syncControlHub();
     syncAmbientPresence({ immediate: true });
@@ -3765,20 +4388,36 @@ function initVoiceRecognition() {
 
   recognition.onend = () => {
     const wasListening = voiceState.listening;
+    const hadFinal = voiceState.didCaptureFinal;
     voiceState.listening = false;
-    document.body.classList.remove("listening-mode");
+    voiceState.transcribing = false;
+    voiceState.didCaptureFinal = false;
+    voiceState.sessionChars = 0;
 
     if (wasListening && elements.saveStatus?.textContent === "在听") {
       setStatusMessage("", 0);
+    } else if (elements.saveStatus?.textContent === "正在变成字…") {
+      setStatusMessage(hadFinal ? "刚才说的，记下了" : "", hadFinal ? 1400 : 0);
     }
     syncControlHub();
     syncAmbientPresence({ immediate: true });
+
+    if (state.pendingSubmitAfterVoice) {
+      state.pendingSubmitAfterVoice = false;
+      window.setTimeout(() => {
+        submitEntry();
+      }, 60);
+    }
   };
 }
 
 function startVoiceCapture() {
   if (!voiceState.supported) {
     setStatusMessage("这里还不能直接说", 1800);
+    return;
+  }
+
+  if (voiceState.transcribing) {
     return;
   }
 
@@ -3811,25 +4450,25 @@ function renderAccessView(status = "idle", customSubtitle = "") {
 
   primary.classList.remove("hidden");
   showPinPanel(true);
-  title.textContent = "输入密码";
-  primary.textContent = status === "active" ? "验证中…" : "进入";
+  title.textContent = "从这里进去";
+  primary.textContent = status === "active" ? "等一下" : "进去";
 
   if (status === "active") {
-    subtitle.textContent = "正在验证…";
+    subtitle.textContent = "快开了";
     return;
   }
 
   if (status === "failed") {
-    subtitle.textContent = customSubtitle || "请再试一次";
+    subtitle.textContent = customSubtitle || "再试一下";
     return;
   }
 
   if (status === "success") {
-    subtitle.textContent = "已进入";
+    subtitle.textContent = "进去了";
     return;
   }
 
-  subtitle.textContent = customSubtitle || "本地保护已开启";
+  subtitle.textContent = customSubtitle || "还是原来的地方";
   if (elements.pinInput) {
     window.setTimeout(() => elements.pinInput.focus(), 30);
   }
@@ -3837,7 +4476,7 @@ function renderAccessView(status = "idle", customSubtitle = "") {
 
 async function completeUnlock() {
   renderAccessView("success");
-  setTraceLoading(true, "正在进入…");
+  setTraceLoading(true, "等一下…");
   await new Promise((resolve) => window.setTimeout(resolve, 280));
   showPinPanel(false);
   await enterOnboardingFlow();
@@ -3852,12 +4491,12 @@ async function handleUnlock() {
 async function handlePinSubmit() {
   const pin = elements.pinInput?.value.trim() || "";
   if (!/^\d{4,6}$/.test(pin)) {
-    if (elements.unlockSubtitle) elements.unlockSubtitle.textContent = "请输入 4 到 6 位数字";
+    if (elements.unlockSubtitle) elements.unlockSubtitle.textContent = "四到六位数字";
     return;
   }
 
   renderAccessView("active");
-  setTraceLoading(true, "正在验证…");
+  setTraceLoading(true, "等一下…");
 
   try {
     await LocalPin.verify(pin);
@@ -3866,7 +4505,7 @@ async function handlePinSubmit() {
   } catch (error) {
     console.error("PIN Auth Failed:", error);
     setTraceLoading(false);
-    renderAccessView("failed", state.pinEnabled ? "PIN 不正确" : "PIN 设置失败");
+    renderAccessView("failed", state.pinEnabled ? "数字不对" : "再来一次");
     if (elements.pinInput) elements.pinInput.value = "";
     window.setTimeout(() => {
       renderAccessView("idle");
@@ -3876,6 +4515,7 @@ async function handlePinSubmit() {
 
 function init() {
   resetLegacyBioState();
+  resetDraftInputMode(INPUT_MODES.text);
   syncProfileUI();
   renderAccessView("idle");
   initVoiceRecognition();
@@ -3887,7 +4527,7 @@ function init() {
 async function handleDisablePin() {
   const currentPin = elements.pinInput?.value.trim() || "";
   if (!/^\d{4,6}$/.test(currentPin)) {
-    renderAccessView("failed", "先输入当前 PIN");
+    renderAccessView("failed", "先写现在这组");
     return;
   }
 
@@ -3906,16 +4546,16 @@ async function handleDisablePin() {
     state.bioEnrolled = false;
     sessionKey = null;
     if (elements.pinInput) elements.pinInput.value = "";
-    renderAccessView("idle", "密码已关闭");
+    renderAccessView("idle", "已经关掉了");
   } catch {
-    renderAccessView("failed", "PIN 不正确");
+    renderAccessView("failed", "数字不对");
   }
 }
 
 async function handleChangePin() {
   const currentPin = elements.pinInput?.value.trim() || "";
   if (!/^\d{4,6}$/.test(currentPin)) {
-    renderAccessView("failed", "先输入当前 PIN");
+    renderAccessView("failed", "先写现在这组");
     return;
   }
 
@@ -3926,9 +4566,9 @@ async function handleChangePin() {
     }
     state.entries = await hydrateStoredEntries(await db.getAll());
     if (elements.pinInput) elements.pinInput.value = "";
-    renderAccessView("idle", "输入新的 4 到 6 位数字");
+    renderAccessView("idle", "换一组新的");
   } catch {
-    renderAccessView("failed", "PIN 不正确");
+    renderAccessView("failed", "数字不对");
   }
 }
 
@@ -3965,7 +4605,7 @@ function bindEvents() {
   }
 
   elements.rawMemoryInput.addEventListener("focus", () => {
-    if (!implicitSession.startMs) implicitSession.startMs = Date.now();
+    noteSessionStart();
     document.body.classList.add("focus-mode");
     noteAmbientActivity();
   });
@@ -3977,7 +4617,9 @@ function bindEvents() {
 
   elements.rawMemoryInput.addEventListener("keydown", (event) => {
     implicitSession.hasTyped = true;
-    if (event.key === "Backspace" || event.key === "Delete") implicitSession.backspaceCount += 1;
+    if (event.key === "Backspace" || event.key === "Delete") {
+      noteSessionInputActivity("delete");
+    }
     noteAmbientActivity();
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
@@ -3986,6 +4628,8 @@ function bindEvents() {
   });
 
   elements.rawMemoryInput.addEventListener("input", (event) => {
+    noteSessionInputActivity("input");
+    noteTypedDraftMutation();
     state.draft = event.target.value;
     window.localStorage.setItem(DRAFT_KEY, state.draft);
     noteAmbientActivity();
@@ -4003,15 +4647,9 @@ function bindEvents() {
     }
   });
 
-  if (elements.controlEntry) {
-    elements.controlEntry.addEventListener("click", () => {
-      primeAmbientSound();
-      setControlHubOpen(!state.controlHubOpen);
-    });
-  }
-
   if (elements.controlSave) {
     elements.controlSave.addEventListener("click", () => {
+      noteSessionControlTouch();
       submitEntry();
     });
   }
@@ -4020,32 +4658,36 @@ function bindEvents() {
     elements.controlHistory.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      noteSessionControlTouch();
       openHistory();
     });
   }
 
   if (elements.controlAnchor) {
     elements.controlAnchor.addEventListener("click", () => {
+      noteSessionControlTouch();
       setAnchorPickerOpen(!state.anchorPickerOpen);
     });
   }
 
   elements.anchorOptionButtons.forEach((button) => {
     button.addEventListener("click", () => {
+      noteSessionControlTouch();
       toggleAnchor(button.dataset.anchor || "");
     });
   });
 
   if (elements.controlVoice) {
     elements.controlVoice.addEventListener("click", () => {
+      noteSessionControlTouch();
       startVoiceCapture();
       setAnchorPickerOpen(false);
-      setControlHubOpen(false);
     });
   }
 
   if (elements.controlDismiss) {
     elements.controlDismiss.addEventListener("click", () => {
+      noteSessionControlTouch();
       clearCurrentDraft();
     });
   }
@@ -4169,34 +4811,54 @@ function bindEvents() {
 }
 
 async function submitEntry() {
-  if (voiceState.listening) {
+  if (voiceState.listening || voiceState.transcribing) {
+    state.pendingSubmitAfterVoice = true;
     stopVoiceCapture({ silent: true });
+    setStatusMessage("等一下", 800);
+    return;
   }
 
   noteAmbientActivity();
 
   const content = elements.rawMemoryInput.value.trim();
-  if (!content && !state.activeAnchor) {
+  const now = new Date();
+  const durationSec = implicitSession.startMs
+    ? Math.round((Date.now() - implicitSession.startMs) / 1000)
+    : 0;
+  const behavior = normalizeBehaviorContext({
+    inputEvents: implicitSession.inputEvents,
+    pauseCount: implicitSession.pauseCount,
+    longestPauseMs: implicitSession.longestPauseMs,
+    backspaceCount: implicitSession.backspaceCount,
+    deleteBurstCount: implicitSession.deleteBurstCount,
+    anchorTouches: implicitSession.anchorTouches,
+    controlTouches: implicitSession.controlTouches,
+    voiceStarts: implicitSession.voiceStarts,
+    voiceChars: implicitSession.voiceChars,
+    voiceInterruptions: implicitSession.voiceInterruptions,
+  });
+
+  if (!hasExpressiveSignal(content, state.activeAnchor, behavior, durationSec)) {
     setAnchorPickerOpen(false);
     setControlHubOpen(false);
     return;
   }
 
-  const now = new Date();
-  const durationSec = implicitSession.startMs
-    ? Math.round((Date.now() - implicitSession.startMs) / 1000)
-    : 0;
   const friction = implicitSession.backspaceCount;
   const timePhase = resolveTimePhase(now);
+  const expression = buildExpressionContext(content, state.activeAnchor, behavior, durationSec);
 
   const entry = {
     id: state.editingId || `mem-${now.getTime()}`,
     content,
+    inputMode: resolveDraftInputMode(),
     timestamp: now.toISOString(),
     context: {
       durationSec,
       friction,
       timePhase,
+      behavior,
+      expression,
     },
     tags: {
       emotion: null,
@@ -4234,6 +4896,7 @@ async function submitEntry() {
     state.draft = "";
     state.editingId = null;
     state.activeAnchor = null;
+    resetDraftInputMode(INPUT_MODES.text);
     window.localStorage.removeItem(DRAFT_KEY);
     elements.saveStatus.textContent = "收好了";
     syncControlHub();
@@ -4259,7 +4922,7 @@ async function submitEntry() {
       elements.saveStatus.textContent = "";
     }, 2000);
 
-    implicitSession = { startMs: null, backspaceCount: 0, hasTyped: false };
+    resetImplicitSession();
   }, 800);
 
   runHealthChecks();
@@ -4281,7 +4944,9 @@ function resetComposeState() {
   state.draft = "";
   state.editingId = null;
   state.activeAnchor = null;
-  implicitSession = { startMs: null, backspaceCount: 0, hasTyped: false };
+  state.pendingSubmitAfterVoice = false;
+  resetDraftInputMode(INPUT_MODES.text);
+  resetImplicitSession();
   window.localStorage.removeItem(DRAFT_KEY);
   syncControlHub();
 }
@@ -4436,10 +5101,16 @@ function calculateWeight(entry, recentEntries) {
 
   const friction = entry.context?.friction || 0;
   const timePhase = entry.context?.timePhase;
+  const behavior = normalizeBehaviorContext(entry.context?.behavior);
+  const expression = normalizeExpressionContext(entry.context?.expression);
 
   if (friction >= 8) weight += 2;
   if (friction >= 15) weight += 3;
   if (timePhase === "深夜") weight += 2;
+  if (behavior.pauseCount >= 2) weight += 1;
+  if (behavior.voiceInterruptions > 0) weight += 1;
+  if (expression.residue) weight += 1;
+  if (expression.silent && behavior.longestPauseMs >= 6000) weight += 1;
 
   const keywords = extractKeywords(entry.content || "");
   const recentKeywords = recentEntries.flatMap((item) => item.tags?.keywords || []);
@@ -4669,8 +5340,15 @@ function checkPendingEchoOnBoot() {
 
   const delay = 1000 * 60 * 60 * 4;
   if (Date.now() - state.pendingEcho.createdAt < delay) return;
+  if (!shouldSurfaceDelayedEcho(state.entries, state.pendingEcho)) {
+    state.pendingEcho = null;
+    persistSystemState();
+    return;
+  }
 
-  showEchoCard(state.pendingEcho.text);
+  window.setTimeout(() => {
+    showEchoCard(state.pendingEcho.text);
+  }, 520);
   state.pendingEcho = null;
   persistSystemState();
 }
@@ -4720,6 +5398,12 @@ function renderHistory() {
     const node = elements.historyEntryTemplate.content.firstElementChild.cloneNode(true);
     node.querySelector(".history-time").textContent = formatEntropyMoment(date);
 
+    const modeNode = node.querySelector(".history-mode");
+    if (modeNode) {
+      modeNode.textContent = getModeUiLabel(getEntryInputMode(entry));
+      modeNode.classList.remove("hidden");
+    }
+
     const metadataNode = node.querySelector(".history-metadata");
     if (metadataNode && entry.metadata?.anchor) {
       metadataNode.textContent = entry.metadata.anchor;
@@ -4740,9 +5424,10 @@ function renderHistory() {
     const textNode = node.querySelector(".history-raw-text");
     const echoNode = node.querySelector(".history-echo-text");
     const secondaryNode = node.querySelector(".history-secondary");
-    textNode.textContent = summarizeHistoryContent(entry.content || "[空白记录]");
-    const flashbackSummary = entry.system?.flashback || "";
-    const secondarySummary = flashbackSummary;
+    textNode.textContent = entry.content
+      ? summarizeHistoryContent(entry.content)
+      : resolveHistoryPlaceholder(entry);
+    const secondarySummary = buildHistorySecondarySummary(entry);
     if (echoNode && secondaryNode && secondarySummary) {
       echoNode.textContent = secondarySummary;
       secondaryNode.classList.remove("hidden");
@@ -5154,46 +5839,60 @@ function buildHistoryNarrative(entries) {
   if (!entries?.length) return "这里还没有留下什么。";
 
   const latest = entries[0];
+  const progression = getCurrentProgression(entries);
   const observation = latest.analysis?.observation;
   const primaryClass =
     observation?.outputReadiness?.history?.narrativeAnchor
     || observation?.outputReadiness?.echo?.primaryClass
     || "";
-  const repeatedTheme = observation?.layers?.longitudinalMemory?.patterns?.repeatedTheme || "";
-  const graph = buildGraph(entries);
-  const metrics = getGraphMetrics(graph);
-  const topic = repeatedTheme || metrics.topNode?.id || latest.metadata?.anchor || "这里";
-  const topicSpot = topic === "这里" ? topic : `「${topic}」`;
+  const climate = deriveSystemClimate(entries);
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_4) {
+    return "这几天先让它安静一点。";
+  }
 
   if (["looping", "unresolved_return", "night_return"].includes(primaryClass)) {
-    return `最近还是会绕回${topicSpot}。`;
+    return progression.stage === EXPERIENCE_STAGES.DAY_7_PLUS
+      ? "你总会回到差不多的地方。"
+      : "最近还是会绕回同一个地方。";
   }
 
   if (["held_back_core", "unfinished_meaning"].includes(primaryClass)) {
-    return `${topicSpot}还停在没有说透的地方。`;
+    return progression.stage === EXPERIENCE_STAGES.DAY_7_PLUS
+      ? "你总会停在要说透之前。"
+      : "最近总停在没说透之前。";
   }
 
   if (primaryClass === "pre_start_loop") {
-    return `${topicSpot}总停在开始之前。`;
+    return progression.stage === EXPERIENCE_STAGES.DAY_7_PLUS
+      ? "有些事会一直停在开始之前。"
+      : "最近总会停在开始之前。";
   }
 
   if (["drift", "narrative_drift", "fragmentation"].includes(primaryClass)) {
-    return `最近有些散开，重心还在${topicSpot}附近。`;
+    return climate === "loose"
+      ? "最近有些地方还没落稳。"
+      : "最近有一点散开，重心还没完全落下。";
   }
 
-  if (["withdrawal", "emotional_compression"].includes(primaryClass)) {
-    return `最近往里收了一些，${topicSpot}还没有退下去。`;
+  if (["withdrawal", "emotional_compression", "silence_after_activation"].includes(primaryClass)) {
+    return "最近往里收了一些，有些东西还压着。";
   }
 
-  if (["fragile_loosening", "integration_attempt", "recovery_direction", "temporary_stabilization"].includes(primaryClass)) {
-    return `最近开始松动一点，但还是牵着${topicSpot}。`;
+  if (["fragile_loosening", "integration_attempt", "recovery_direction", "temporary_stabilization", "coherence_forming"].includes(primaryClass)) {
+    return progression.stage === EXPERIENCE_STAGES.DAY_7_PLUS
+      ? "有些地方已经开始慢慢松了。"
+      : "最近开始松一点了。";
   }
 
   if (["role_pressure", "identity_strain", "identity_performance_pressure", "recurring_social_pressure"].includes(primaryClass)) {
-    return `最近总有别的要求压下来，还是会回到${topicSpot}。`;
+    return "最近总有别的力把你往外拉。";
   }
 
-  return `最近的记录还是会回到${topicSpot}。`;
+  if (climate === "heavy") return "最近有些重量一直没有退下去。";
+  if (climate === "tight") return "最近有些线一直绷在里面。";
+  if (climate === "light") return "最近慢慢能看出一点方向了。";
+  return "最近有些东西还在慢慢浮出来。";
 }
 
 function loadEntryForEdit(id) {
@@ -5204,6 +5903,8 @@ function loadEntryForEdit(id) {
   state.draft = entry.content || "";
   state.editingId = id;
   state.activeAnchor = entry.metadata?.anchor || null;
+  resetDraftInputMode(getEntryInputMode(entry));
+  resetImplicitSession();
   syncControlHub();
   closeHistory({ immediate: true });
   setReviewToolsOpen(false);
@@ -5417,29 +6118,7 @@ async function playTraceFeedback() {
 function normalizeEntries(entries) {
   return entries
     .filter(Boolean)
-    .map((entry) => ({
-      id: entry.id || `mem-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      content: typeof entry.content === "string" ? entry.content : "",
-      timestamp: entry.timestamp || new Date().toISOString(),
-      context: {
-        durationSec: Number.isFinite(entry.context?.durationSec) ? entry.context.durationSec : 0,
-        friction: Number.isFinite(entry.context?.friction) ? entry.context.friction : 0,
-        timePhase: entry.context?.timePhase || resolveTimePhase(new Date(entry.timestamp || Date.now())),
-      },
-      tags: {
-        emotion: entry.tags?.emotion || null,
-        keywords: Array.isArray(entry.tags?.keywords) ? entry.tags.keywords : [],
-      },
-      system: {
-        weight: Number.isFinite(entry.system?.weight) ? entry.system.weight : 0,
-        echo: entry.system?.echo || null,
-        echoLevel: entry.system?.echoLevel || null,
-        echoType: entry.system?.echoType || null,
-        flashback: entry.system?.flashback || null,
-      },
-      metadata: entry.metadata || null,
-      analysis: entry.analysis || null,
-    }))
+    .map((entry) => createPlainEntryShape(entry))
     .sort((left, right) => new Date(right.timestamp) - new Date(left.timestamp));
 }
 
@@ -5452,6 +6131,8 @@ async function reanalyzeEntriesIfNeeded() {
     const previousEntries = [...rebuilt, ...state.entries.slice(index + 1)];
     const observation = entry.analysis?.observation;
     const needsRefresh =
+      !entry.inputMode
+      ||
       !entry.analysis?.response?.echo
       || isDeadGenericEchoText(entry.analysis?.response?.echo)
       || isDeadGenericEchoText(entry.analysis?.response?.pattern_hint)
@@ -5652,6 +6333,11 @@ function inferConfidence(entry, surfaceEmotion, coreTension, patternLink, observ
 }
 
 function buildAnalysisEcho(interpretation, memory, entry) {
+  const modeContrast = buildModeContrastEcho(entry, state.entries);
+  if (modeContrast && !isDeadGenericEchoText(modeContrast)) {
+    return modeContrast;
+  }
+
   const primary = generateEchoSentence(entry, interpretation, memory, {
     family: interpretation.echo_family,
     tone: interpretation.echo_tone,
@@ -5661,53 +6347,20 @@ function buildAnalysisEcho(interpretation, memory, entry) {
     return primary;
   }
 
-  if (interpretation.pattern_link) return interpretation.pattern_link;
-  if (memory.longIdentityMemory[0]) return memory.longIdentityMemory[0];
-  return "这里还没有完全落下。";
+  const fallback = generateEchoSentence(entry, interpretation, memory, {
+    family: interpretation.pattern_link ? "circling" : "trace",
+    tone: interpretation.pattern_link ? "soft" : "residue",
+  });
+
+  if (fallback && !isDeadGenericEchoText(fallback)) {
+    return fallback;
+  }
+
+  return "还没离开。";
 }
 
 function buildAnalysisQuestion(interpretation, memory) {
-  if (interpretation.echo_family === "pre_start") {
-    return "你真正停住的是哪一下？";
-  }
-
-  if (["held_back", "almost_said"].includes(interpretation.echo_family)) {
-    return "你收住的那句是什么？";
-  }
-
-  if (interpretation.echo_family === "drift") {
-    return "你刚才绕开的是哪一点？";
-  }
-
-  if (interpretation.echo_family === "inward_pull") {
-    return "你往里收的时候，最先避开的是什么？";
-  }
-
-  if (interpretation.core_tension.includes("行动")) {
-    return "压住你的，是结果，还是一开始就停不下来？";
-  }
-
-  if (interpretation.defense_signal === "回避") {
-    return "你先退开的，是事情，还是后面的现实？";
-  }
-
-  if (interpretation.defense_signal === "压抑") {
-    return "如果不先压住它，最先出来的会是什么？";
-  }
-
-  if (interpretation.pattern_link || memory.openLoops.length) {
-    return "和前几次比，真正没变的是什么？";
-  }
-
-  if (interpretation.topic_entities.includes("关系")) {
-    return "这里更难碰到的是失望，还是需要？";
-  }
-
-  if (interpretation.topic_entities.includes("工作")) {
-    return "压住你的，是事情，还是结果？";
-  }
-
-  return "如果只留一句，哪一句最难写？";
+  return "";
 }
 
 function runHealthChecks() {
@@ -5821,8 +6474,7 @@ function findSerendipitousEcho(currentEntry, entries) {
 
   if (!candidate) return null;
 
-  const excerpt = summarizeHistoryContent(candidate.content || "");
-  return `这和${formatEntropyMoment(new Date(candidate.timestamp))}写下的那段话，像是同一个没有解开的结：「${excerpt}」`;
+  return `这和${formatEntropyMoment(new Date(candidate.timestamp))}那次，还连着。`;
 }
 
 function getDayDiff(date) {
