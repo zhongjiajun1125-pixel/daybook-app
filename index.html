@@ -15,7 +15,7 @@
     <link rel="icon" href="./trace-logo-black.png">
     <link rel="apple-touch-icon" href="./trace-logo-black.png">
     
-    <link rel="stylesheet" href="./styles.css?v=20260402-3" />
+    <link rel="stylesheet" href="./styles.css?v=20260402-4" />
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -128,27 +128,48 @@
                 />
                 <span class="paper-kicker">现在</span>
               </div>
-              <button id="history-toggle" class="paper-link-btn" type="button">回看</button>
             </div>
             <textarea
               id="raw-memory-input"
               class="seamless-input"
-              placeholder="写下此刻。"
+              placeholder="写一点。"
               autofocus
             ></textarea>
+            <div class="compose-footer">
+              <span id="save-status" class="status-indicator" aria-live="polite"></span>
+              <div id="control-hub" class="control-hub" aria-label="写作控制">
+                <button
+                  id="control-entry"
+                  class="control-entry"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="control-actions"
+                >
+                  留一下
+                </button>
+                <div id="control-actions" class="control-actions" aria-hidden="true">
+                  <button id="control-save" class="control-action" type="button">留下</button>
+                  <button id="control-history" class="control-action" type="button">回看</button>
+                  <button id="control-anchor" class="control-action" type="button">标一下</button>
+                  <div id="anchor-options" class="anchor-options" aria-hidden="true">
+                    <button class="anchor-option" data-anchor="焦滞" type="button">卡着</button>
+                    <button class="anchor-option" data-anchor="游离" type="button">散着</button>
+                    <button class="anchor-option" data-anchor="澄明" type="button">清一点</button>
+                    <button class="anchor-option" data-anchor="沉缩" type="button">收着</button>
+                  </div>
+                  <button id="control-voice" class="control-action" type="button">说出来</button>
+                  <button id="control-dismiss" class="control-action" type="button">算了</button>
+                </div>
+              </div>
+            </div>
           </article>
-
-          <div class="compose-footer">
-            <span id="save-status" class="status-indicator"></span>
-            <button id="save-entry-btn" class="subtle-submit-btn" type="button">留下</button>
-          </div>
         </div>
       </section>
 
       <aside id="history-panel" class="history-panel hidden" aria-hidden="true">
         <div class="history-header">
           <h2>回看</h2>
-          <button id="close-history-btn" class="close-btn" type="button">返回</button>
+          <button id="close-history-btn" class="close-btn" type="button">继续写</button>
         </div>
         
         <div id="history-pattern-layer" class="history-pattern-layer empty">
@@ -168,7 +189,7 @@
             <div class="history-meta">
               <time class="history-time"></time>
               <span class="history-metadata hidden"></span>
-              <button class="history-delete-btn" type="button" aria-label="删除记录">删除</button>
+              <button class="history-delete-btn" type="button" aria-label="删掉这条">删掉</button>
             </div>
             <p class="history-raw-text"></p>
           </div>
@@ -178,6 +199,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260402-3"></script>
+    <script src="./app.js?v=20260402-4"></script>
   </body>
 </html>

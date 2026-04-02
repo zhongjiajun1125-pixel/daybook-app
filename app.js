@@ -8,7 +8,6 @@ const STORE_NAME = "entries";
 const SETTINGS_STORE = "settings";
 const DRAFT_KEY = "trace-draft-v1";
 const LAST_ACTIVE_KEY = "trace-last-active";
-const FONT_STYLE_KEY = "trace-font-style";
 const PROFILE_NAME_KEY = "trace-profile-name";
 const BIO_KEY = "trace-bio-enrolled";
 const BIO_CRED_KEY = "trace-bio-cred-id";
@@ -47,6 +46,14 @@ const FIRST_TIME_ONBOARDING_STEPS = Object.freeze([
 const RETURNING_THRESHOLD_STATE = Object.freeze({
   line: "它还在这里。",
   action: "继续",
+});
+
+const EXPERIENCE_STAGES = Object.freeze({
+  DAY_1_2: "day1_2",
+  DAY_3: "day3",
+  DAY_4: "day4",
+  DAY_5_6: "day5_6",
+  DAY_7_PLUS: "day7_plus",
 });
 
 const DEAD_GENERIC_ECHO_LINES = Object.freeze([
@@ -525,9 +532,7 @@ const elements = {
   importBtn: document.getElementById("import-data-btn"),
   importInput: document.getElementById("import-file-input"),
   exportBtn: document.getElementById("export-data-btn"),
-  fontToggleBtn: document.getElementById("font-toggle-btn"),
   vaultToggleBtn: document.getElementById("vault-toggle-btn"),
-  historyToggle: document.getElementById("history-toggle"),
   traceLoading: document.getElementById("trace-loading"),
   traceLoadingMark: document.getElementById("trace-loading-mark"),
   traceLoadingLabel: document.getElementById("trace-loading-label"),
@@ -559,13 +564,19 @@ const elements = {
   echoCardLine1: document.getElementById("echo-card-line-1"),
   echoCardLine2: document.getElementById("echo-card-line-2"),
   echoCardLine3: document.getElementById("echo-card-line-3"),
-  fontStyleLabel: document.getElementById("font-style-label"),
   composeTraceMark: document.getElementById("compose-trace-mark"),
   rawMemoryInput: document.getElementById("raw-memory-input"),
-  anchorBtns: document.querySelectorAll(".anchor-btn"),
   saveStatus: document.getElementById("save-status"),
-  saveEntryBtn: document.getElementById("save-entry-btn"),
-  swallowBtn: document.getElementById("swallow-btn"),
+  controlHub: document.getElementById("control-hub"),
+  controlEntry: document.getElementById("control-entry"),
+  controlActions: document.getElementById("control-actions"),
+  controlSave: document.getElementById("control-save"),
+  controlHistory: document.getElementById("control-history"),
+  controlAnchor: document.getElementById("control-anchor"),
+  anchorOptions: document.getElementById("anchor-options"),
+  anchorOptionButtons: document.querySelectorAll(".anchor-option"),
+  controlVoice: document.getElementById("control-voice"),
+  controlDismiss: document.getElementById("control-dismiss"),
   historyPanel: document.getElementById("history-panel"),
   historyPatternLayer: document.getElementById("history-pattern-layer"),
   insightSummary: document.getElementById("insight-summary"),
@@ -587,7 +598,6 @@ let state = {
   editingId: null,
   isLoaded: false,
   activeAnchor: null,
-  fontStyle: window.localStorage.getItem(FONT_STYLE_KEY) || "system",
   profileName: window.localStorage.getItem(PROFILE_NAME_KEY) || "",
   bioEnrolled: window.localStorage.getItem(BIO_KEY) === "1",
   pinEnabled: Boolean(window.localStorage.getItem(PIN_HASH_KEY)),
@@ -598,6 +608,8 @@ let state = {
   isFirstTimeUser: true,
   onboardingStep: 0,
   onboardingTransitioning: false,
+  controlHubOpen: false,
+  anchorPickerOpen: false,
 };
 
 let implicitSession = {
@@ -2801,7 +2813,6 @@ async function bootSystem() {
     await syncVaultButton();
     state.isLoaded = true;
     elements.rawMemoryInput.value = state.draft;
-    applyFontStyle(state.fontStyle);
 
     const hasEntries = state.entries.length > 0;
     updateHomepageState(hasEntries);
@@ -2949,6 +2960,196 @@ function setStatusMessage(text = "", timeout = 0) {
   }
 }
 
+function syncControlHub() {
+  if (!elements.controlHub || !elements.controlEntry || !elements.controlActions) return;
+
+  elements.controlHub.classList.toggle("is-open", state.controlHubOpen);
+  elements.controlHub.classList.toggle("is-marking", state.anchorPickerOpen);
+  elements.controlEntry.setAttribute("aria-expanded", String(state.controlHubOpen));
+  elements.controlActions.setAttribute("aria-hidden", String(!state.controlHubOpen));
+
+  if (elements.anchorOptions) {
+    elements.anchorOptions.setAttribute("aria-hidden", String(!state.anchorPickerOpen));
+  }
+
+  if (elements.controlVoice) {
+    elements.controlVoice.textContent = voiceState.listening ? "先停一下" : "说出来";
+  }
+
+  elements.anchorOptionButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.anchor === state.activeAnchor);
+  });
+}
+
+function setControlHubOpen(open) {
+  state.controlHubOpen = Boolean(open);
+  if (!state.controlHubOpen) {
+    state.anchorPickerOpen = false;
+  }
+  syncControlHub();
+}
+
+function setAnchorPickerOpen(open) {
+  state.anchorPickerOpen = Boolean(open);
+  if (state.anchorPickerOpen) {
+    state.controlHubOpen = true;
+  }
+  syncControlHub();
+}
+
+function toggleAnchor(anchor) {
+  state.activeAnchor = state.activeAnchor === anchor ? null : anchor;
+  setAnchorPickerOpen(false);
+  setControlHubOpen(false);
+  elements.rawMemoryInput.focus();
+  syncControlHub();
+}
+
+function clearCurrentDraft() {
+  if (voiceState.listening) {
+    stopVoiceCapture({ silent: true });
+  }
+
+  resetComposeState();
+  hideEchoCard(true);
+  setStatusMessage("", 0);
+  setAnchorPickerOpen(false);
+  setControlHubOpen(false);
+  elements.rawMemoryInput.focus();
+}
+
+function openHistoryOverlay() {
+  state.historyOpen = true;
+  if (closeHistory._timer) {
+    window.clearTimeout(closeHistory._timer);
+    closeHistory._timer = null;
+  }
+  elements.historyPanel.classList.remove("is-closing");
+  elements.historyPanel.classList.remove("hidden");
+  elements.historyPanel.setAttribute("aria-hidden", "false");
+  hideEchoCard(true);
+  document.body.classList.remove("focus-mode");
+  setAnchorPickerOpen(false);
+  setControlHubOpen(false);
+  renderHistory();
+}
+
+function getEntryLocalDayKey(entry) {
+  const date = new Date(entry?.timestamp || Date.now());
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getExperienceProgression(currentEntry, entries = state.entries) {
+  const pool = [currentEntry, ...entries]
+    .filter(Boolean)
+    .reduce((list, entry) => {
+      if (list.some((item) => item.id === entry.id)) return list;
+      list.push(entry);
+      return list;
+    }, [])
+    .sort((left, right) => new Date(left.timestamp) - new Date(right.timestamp));
+
+  const dayKeys = [];
+  pool.forEach((entry) => {
+    const key = getEntryLocalDayKey(entry);
+    if (!dayKeys.includes(key)) dayKeys.push(key);
+  });
+
+  const currentDayKey = getEntryLocalDayKey(currentEntry);
+  const currentDayIndex = Math.max(dayKeys.indexOf(currentDayKey) + 1, 1);
+  const activeDays = dayKeys.length;
+
+  let stage = EXPERIENCE_STAGES.DAY_1_2;
+  if (currentDayIndex === 3) stage = EXPERIENCE_STAGES.DAY_3;
+  else if (currentDayIndex === 4) stage = EXPERIENCE_STAGES.DAY_4;
+  else if (currentDayIndex >= 5 && currentDayIndex <= 6) stage = EXPERIENCE_STAGES.DAY_5_6;
+  else if (currentDayIndex >= 7) stage = EXPERIENCE_STAGES.DAY_7_PLUS;
+
+  return {
+    activeDays,
+    currentDayIndex,
+    stage,
+  };
+}
+
+function hasMeaningfulEchoSignal(entry) {
+  const interpretation = entry.analysis?.interpretation || {};
+  const observation = entry.analysis?.observation;
+  const primaryClass = observation?.outputReadiness?.echo?.primaryClass || interpretation.observation_primary_class || "";
+  const topClassScore = observation?.classes?.[0]?.score || 0;
+
+  return Boolean(
+    interpretation.pattern_link
+      || interpretation.core_tension
+      || (primaryClass && primaryClass !== "trace")
+      || interpretation.confidence >= 0.6
+      || topClassScore >= 0.66
+  );
+}
+
+function hasStrongEchoSignal(entry) {
+  const interpretation = entry.analysis?.interpretation || {};
+  const observation = entry.analysis?.observation;
+  const topClassScore = observation?.classes?.[0]?.score || 0;
+
+  return Boolean(
+    (interpretation.pattern_link && interpretation.core_tension)
+      || interpretation.confidence >= 0.76
+      || topClassScore >= 0.78
+      || (entry.system?.weight || 0) >= 6
+  );
+}
+
+function shouldSurfaceEntryEcho(entry, entries = state.entries) {
+  const progression = getExperienceProgression(entry, entries);
+  const meaningful = hasMeaningfulEchoSignal(entry);
+  const strong = hasStrongEchoSignal(entry);
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_1_2) {
+    return strong;
+  }
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_3) {
+    return meaningful;
+  }
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_4) {
+    return false;
+  }
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_5_6) {
+    return meaningful;
+  }
+
+  return meaningful || strong;
+}
+
+function shouldAllowScheduledEcho(pattern, level, entry, entries = state.entries) {
+  const progression = getExperienceProgression(entry, entries);
+  const strongPattern = level >= 2 || pattern.type === "open_loop" || (entry.system?.weight || 0) >= 6;
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_1_2) {
+    return false;
+  }
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_3) {
+    return strongPattern;
+  }
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_4) {
+    return false;
+  }
+
+  if (progression.stage === EXPERIENCE_STAGES.DAY_5_6) {
+    return strongPattern || pattern.type === "repeat";
+  }
+
+  return true;
+}
+
 function clearTraceMarkState(node) {
   if (!node) return;
   node.classList.remove("is-loading", "is-sealing", "is-echo");
@@ -3013,6 +3214,7 @@ function stopVoiceCapture({ silent = false } = {}) {
   if (!recognition || !voiceState.listening) {
     voiceState.listening = false;
     document.body.classList.remove("listening-mode");
+    syncControlHub();
     return;
   }
 
@@ -3020,8 +3222,9 @@ function stopVoiceCapture({ silent = false } = {}) {
   recognition.stop();
   document.body.classList.remove("listening-mode");
   if (!silent) {
-    setStatusMessage("语音已停止", 1200);
+    setStatusMessage("先停一下", 1200);
   }
+  syncControlHub();
 }
 
 function initVoiceRecognition() {
@@ -3038,7 +3241,8 @@ function initVoiceRecognition() {
   recognition.onstart = () => {
     voiceState.listening = true;
     document.body.classList.add("listening-mode");
-    setStatusMessage("正在倾听…", 0);
+    setStatusMessage("在听", 0);
+    syncControlHub();
   };
 
   recognition.onresult = (event) => {
@@ -3055,7 +3259,7 @@ function initVoiceRecognition() {
 
     if (finalTranscript) {
       insertTextAtCursor(finalTranscript);
-      setStatusMessage("语音已写入", 1400);
+      setStatusMessage("已经记下了", 1400);
     }
   };
 
@@ -3064,12 +3268,14 @@ function initVoiceRecognition() {
     document.body.classList.remove("listening-mode");
 
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-      setStatusMessage("未获得麦克风权限", 1800);
+      setStatusMessage("这里还不能直接说", 1800);
+      syncControlHub();
       return;
     }
 
     if (event.error === "no-speech") {
-      setStatusMessage("没有识别到语音", 1400);
+      setStatusMessage("刚刚没听清", 1400);
+      syncControlHub();
       return;
     }
 
@@ -3077,7 +3283,8 @@ function initVoiceRecognition() {
       return;
     }
 
-    setStatusMessage("语音不可用", 1800);
+    setStatusMessage("这里还不能直接说", 1800);
+    syncControlHub();
   };
 
   recognition.onend = () => {
@@ -3085,15 +3292,16 @@ function initVoiceRecognition() {
     voiceState.listening = false;
     document.body.classList.remove("listening-mode");
 
-    if (wasListening && elements.saveStatus?.textContent === "正在倾听…") {
+    if (wasListening && elements.saveStatus?.textContent === "在听") {
       setStatusMessage("", 0);
     }
+    syncControlHub();
   };
 }
 
 function startVoiceCapture() {
   if (!voiceState.supported) {
-    setStatusMessage("当前浏览器不支持语音", 1800);
+    setStatusMessage("这里还不能直接说", 1800);
     return;
   }
 
@@ -3108,7 +3316,7 @@ function startVoiceCapture() {
   try {
     recognition.start();
   } catch {
-    setStatusMessage("语音暂时不可用", 1800);
+    setStatusMessage("这里还不能直接说", 1800);
   }
 }
 
@@ -3194,6 +3402,7 @@ function init() {
   renderAccessView("idle");
   initVoiceRecognition();
   bindEvents();
+  syncControlHub();
 }
 
 async function handleDisablePin() {
@@ -3296,6 +3505,10 @@ function bindEvents() {
   elements.rawMemoryInput.addEventListener("input", (event) => {
     state.draft = event.target.value;
     window.localStorage.setItem(DRAFT_KEY, state.draft);
+    if (state.controlHubOpen) {
+      setAnchorPickerOpen(false);
+      setControlHubOpen(false);
+    }
   });
 
   elements.rawMemoryInput.addEventListener("dblclick", (event) => {
@@ -3305,20 +3518,47 @@ function bindEvents() {
     }
   });
 
-  elements.saveEntryBtn.addEventListener("click", submitEntry);
-  if (elements.historyToggle) {
-    elements.historyToggle.addEventListener("click", () => {
-      state.historyOpen = true;
-      if (closeHistory._timer) {
-        window.clearTimeout(closeHistory._timer);
-        closeHistory._timer = null;
-      }
-      elements.historyPanel.classList.remove("is-closing");
-      elements.historyPanel.classList.remove("hidden");
-      elements.historyPanel.setAttribute("aria-hidden", "false");
-      hideEchoCard(true);
-      document.body.classList.remove("focus-mode");
-      renderHistory();
+  if (elements.controlEntry) {
+    elements.controlEntry.addEventListener("click", () => {
+      setControlHubOpen(!state.controlHubOpen);
+    });
+  }
+
+  if (elements.controlSave) {
+    elements.controlSave.addEventListener("click", () => {
+      submitEntry();
+    });
+  }
+
+  if (elements.controlHistory) {
+    elements.controlHistory.addEventListener("click", () => {
+      openHistoryOverlay();
+    });
+  }
+
+  if (elements.controlAnchor) {
+    elements.controlAnchor.addEventListener("click", () => {
+      setAnchorPickerOpen(!state.anchorPickerOpen);
+    });
+  }
+
+  elements.anchorOptionButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      toggleAnchor(button.dataset.anchor || "");
+    });
+  });
+
+  if (elements.controlVoice) {
+    elements.controlVoice.addEventListener("click", () => {
+      startVoiceCapture();
+      setAnchorPickerOpen(false);
+      setControlHubOpen(false);
+    });
+  }
+
+  if (elements.controlDismiss) {
+    elements.controlDismiss.addEventListener("click", () => {
+      clearCurrentDraft();
     });
   }
 
@@ -3334,10 +3574,6 @@ function bindEvents() {
 
   if (elements.exportBtn) {
     elements.exportBtn.addEventListener("click", exportEntries);
-  }
-
-  if (elements.fontToggleBtn) {
-    elements.fontToggleBtn.addEventListener("click", cycleFontStyle);
   }
 
   if (elements.vaultToggleBtn) {
@@ -3366,13 +3602,30 @@ function bindEvents() {
 
     if (event.key === "Escape" && state.historyOpen) {
       closeHistory();
+      return;
+    }
+
+    if (event.key === "Escape" && state.anchorPickerOpen) {
+      setAnchorPickerOpen(false);
+      return;
+    }
+
+    if (event.key === "Escape" && state.controlHubOpen) {
+      setControlHubOpen(false);
     }
   });
 
   document.addEventListener("click", (event) => {
-    if (!state.historyOpen) return;
-    if (elements.historyPanel.contains(event.target) || elements.historyToggle.contains(event.target)) return;
-    closeHistory();
+    if (state.historyOpen) {
+      if (elements.historyPanel.contains(event.target)) return;
+      closeHistory();
+      return;
+    }
+
+    if (!state.controlHubOpen || !elements.controlHub) return;
+    if (elements.controlHub.contains(event.target)) return;
+    setAnchorPickerOpen(false);
+    setControlHubOpen(false);
   });
 
   window.addEventListener("resize", () => {
@@ -3391,7 +3644,11 @@ async function submitEntry() {
   }
 
   const content = elements.rawMemoryInput.value.trim();
-  if (!content && !state.activeAnchor) return;
+  if (!content && !state.activeAnchor) {
+    setAnchorPickerOpen(false);
+    setControlHubOpen(false);
+    return;
+  }
 
   const now = new Date();
   const durationSec = implicitSession.startMs
@@ -3425,7 +3682,9 @@ async function submitEntry() {
   elements.rawMemoryInput.blur();
   elements.rawMemoryInput.classList.add("ink-dissolve");
   document.body.classList.remove("focus-mode");
-  elements.saveStatus.textContent = "封存中…";
+  setAnchorPickerOpen(false);
+  setControlHubOpen(false);
+  elements.saveStatus.textContent = "收着…";
   animateTraceMark(elements.composeTraceMark, "is-sealing", MOTION.logoSealMs);
   playTraceFeedback();
 
@@ -3434,7 +3693,7 @@ async function submitEntry() {
   RetentionSniper.updateActivity();
 
   window.setTimeout(() => {
-    elements.saveStatus.textContent = "已封存";
+    elements.saveStatus.textContent = "收好了";
   }, 280);
 
   window.setTimeout(async () => {
@@ -3444,8 +3703,8 @@ async function submitEntry() {
     state.editingId = null;
     state.activeAnchor = null;
     window.localStorage.removeItem(DRAFT_KEY);
-    elements.anchorBtns.forEach((button) => button.classList.remove("active"));
-    elements.saveStatus.textContent = "已封存";
+    elements.saveStatus.textContent = "收好了";
+    syncControlHub();
 
     await silentAnalyze(entry);
     await writeEntryToVault(entry);
@@ -3492,6 +3751,7 @@ function resetComposeState() {
   state.activeAnchor = null;
   implicitSession = { startMs: null, backspaceCount: 0, hasTyped: false };
   window.localStorage.removeItem(DRAFT_KEY);
+  syncControlHub();
 }
 
 function triggerSystemEcho() {
@@ -3519,6 +3779,7 @@ function closeHistory() {
     if (!elements.composeView.classList.contains("hidden")) {
       elements.rawMemoryInput.focus();
     }
+    syncControlHub();
   }, 280);
 }
 
@@ -3544,10 +3805,18 @@ function renderEchoBlock(response) {
 }
 
 function buildEntryEchoCard(entry) {
+  const progression = getExperienceProgression(entry, state.entries);
+  const allowFlashback = progression.currentDayIndex >= 7;
+
+  if (!shouldSurfaceEntryEcho(entry, state.entries)) {
+    return null;
+  }
+
   if (entry.system?.echo) {
     return {
       ...entry.system.echo,
-      l3: entry.system.flashback || entry.system.echo.l3 || "",
+      l2: progression.currentDayIndex >= 7 ? entry.system.echo.l2 || "" : "",
+      l3: allowFlashback ? (entry.system.flashback || entry.system.echo.l3 || "") : "",
     };
   }
 
@@ -3555,9 +3824,9 @@ function buildEntryEchoCard(entry) {
   if (response.echo) {
     return {
       l1: response.echo || "",
-      l2: entry.system?.flashback || "",
-      l3: "",
-      level: 1,
+      l2: "",
+      l3: allowFlashback ? (entry.system?.flashback || "") : "",
+      level: progression.currentDayIndex >= 7 ? 2 : 1,
     };
   }
 
@@ -3577,8 +3846,7 @@ function buildEntryEchoCard(entry) {
         family: interpretation.echo_family || "trace",
         tone: interpretation.echo_tone || "soft",
       }),
-      l2: "",
-      l3: entry.system?.flashback || "",
+      l3: "",
       level: 1,
     };
   }
@@ -3647,6 +3915,13 @@ function scheduleEcho(entry, allEntries) {
 
   const top = patterns[0];
   const key = top.type;
+  const nextCount = (state.echoChain[key]?.count || 0) + 1;
+  const nextLevel = Math.min(nextCount, 3);
+  const scopedEntries = [entry, ...allEntries.filter((item) => item.id !== entry.id)];
+
+  if (!shouldAllowScheduledEcho(top, nextLevel, entry, scopedEntries)) {
+    return null;
+  }
 
   if (!state.echoChain[key]) {
     state.echoChain[key] = { count: 0, lastTimestamp: 0 };
@@ -3862,29 +4137,6 @@ function cleanupEchoChain() {
   });
 
   persistSystemState();
-}
-
-function cycleFontStyle() {
-  const order = ["system", "writing", "serif"];
-  const currentIndex = order.indexOf(state.fontStyle);
-  const nextStyle = order[(currentIndex + 1) % order.length];
-  applyFontStyle(nextStyle);
-}
-
-function applyFontStyle(style) {
-  state.fontStyle = style;
-  document.body.dataset.fontStyle = style;
-  window.localStorage.setItem(FONT_STYLE_KEY, style);
-
-  const labels = {
-    system: "默认",
-    writing: "柔和",
-    serif: "衬线",
-  };
-
-  if (elements.fontStyleLabel) {
-    elements.fontStyleLabel.textContent = labels[style] || labels.system;
-  }
 }
 
 function renderHistory() {
@@ -4403,10 +4655,7 @@ function loadEntryForEdit(id) {
   state.draft = entry.content || "";
   state.editingId = id;
   state.activeAnchor = entry.metadata?.anchor || null;
-
-  elements.anchorBtns.forEach((button) => {
-    button.classList.toggle("active", button.dataset.anchor === state.activeAnchor);
-  });
+  syncControlHub();
 
   elements.historyPanel.classList.add("hidden");
   elements.historyPanel.classList.remove("is-closing");
@@ -4421,7 +4670,7 @@ async function deleteEntry(id) {
   const entry = state.entries.find((item) => item.id === id);
   if (!entry) return;
 
-  const confirmed = window.confirm("删除这条记录？\n它会从这台设备里移除，之后不能恢复。");
+  const confirmed = window.confirm("删掉这条？\n从这台设备里拿走以后，就回不来了。");
   if (!confirmed) return;
 
   await db.delete(id);
@@ -4446,6 +4695,11 @@ function showView(viewName) {
   if (elements.unlockView) elements.unlockView.classList.toggle("hidden", viewName !== "unlock");
   elements.onboardingView.classList.toggle("hidden", viewName !== "onboarding");
   elements.composeView.classList.toggle("hidden", viewName !== "compose");
+
+  if (viewName !== "compose") {
+    setAnchorPickerOpen(false);
+    setControlHubOpen(false);
+  }
 
   if (viewName === "onboarding") {
     animateTraceMark(elements.onboardingTraceMark, "is-sealing", MOTION.logoSealMs);
