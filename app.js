@@ -26,7 +26,7 @@ const MOTION = Object.freeze({
   logoEchoMs: 760,
   echoCardHoldMs: 4600,
   echoCardExitMs: 380,
-  onboardingSwapMs: 280,
+  onboardingSwapMs: 240,
 });
 
 const FIRST_TIME_ONBOARDING_STEPS = Object.freeze([
@@ -3305,22 +3305,7 @@ function bindEvents() {
     }
   });
 
-  elements.anchorBtns.forEach((button) => {
-    button.addEventListener("click", () => {
-      const anchor = button.dataset.anchor;
-      if (state.activeAnchor === anchor) {
-        state.activeAnchor = null;
-        button.classList.remove("active");
-        return;
-      }
-
-      state.activeAnchor = anchor;
-      elements.anchorBtns.forEach((item) => item.classList.toggle("active", item.dataset.anchor === anchor));
-    });
-  });
-
   elements.saveEntryBtn.addEventListener("click", submitEntry);
-  if (elements.swallowBtn) elements.swallowBtn.addEventListener("click", submitEntry);
   if (elements.historyToggle) {
     elements.historyToggle.addEventListener("click", () => {
       state.historyOpen = true;
@@ -3331,6 +3316,8 @@ function bindEvents() {
       elements.historyPanel.classList.remove("is-closing");
       elements.historyPanel.classList.remove("hidden");
       elements.historyPanel.setAttribute("aria-hidden", "false");
+      hideEchoCard(true);
+      document.body.classList.remove("focus-mode");
       renderHistory();
     });
   }
@@ -3505,22 +3492,10 @@ function resetComposeState() {
   state.activeAnchor = null;
   implicitSession = { startMs: null, backspaceCount: 0, hasTyped: false };
   window.localStorage.removeItem(DRAFT_KEY);
-  elements.anchorBtns.forEach((button) => button.classList.remove("active"));
 }
 
 function triggerSystemEcho() {
-  if (!state.entries.length) {
-    renderEchoBlock({ echo: "", question: "", pattern_hint: "" });
-    return;
-  }
-
-  const latest = state.entries[0];
-  const response = latest.analysis?.response || {
-    echo: latest.analysis?.interpretation?.core_tension || "",
-    question: "",
-    pattern_hint: "",
-  };
-  renderEchoBlock(response);
+  renderEchoBlock({ echo: "", question: "", pattern_hint: "" });
 }
 
 function closeHistory() {
@@ -3549,9 +3524,10 @@ function closeHistory() {
 
 function renderEchoBlock(response) {
   const panel = elements.systemEchoPanel;
+  if (!panel) return;
   panel.innerHTML = "";
 
-  const pieces = [response?.echo, response?.question, response?.pattern_hint].filter(Boolean);
+  const pieces = [response?.echo].filter(Boolean);
   if (!pieces.length) {
     panel.classList.add("empty");
     return;
@@ -3576,13 +3552,11 @@ function buildEntryEchoCard(entry) {
   }
 
   const response = entry.analysis?.response || {};
-  const pieces = [response.echo, response.question, response.pattern_hint].filter(Boolean);
-
-  if (pieces.length) {
+  if (response.echo) {
     return {
-      l1: pieces[0] || "",
-      l2: pieces[1] || "",
-      l3: entry.system?.flashback || pieces[2] || "",
+      l1: response.echo || "",
+      l2: entry.system?.flashback || "",
+      l3: "",
       level: 1,
     };
   }
@@ -3835,11 +3809,6 @@ function showEchoCard(payload) {
   elements.echoCardLine2.textContent = payload.l2 || "";
   elements.echoCardLine3.textContent = payload.l3 || "";
   animateTraceMark(elements.composeTraceMark, "is-echo", MOTION.logoEchoMs);
-  if ((payload.level || 0) >= 3) {
-    elements.echoCard.style.borderColor = "rgba(255,255,255,0.12)";
-  } else {
-    elements.echoCard.style.borderColor = "";
-  }
 
   elements.echoCard.classList.remove("hidden", "fade-out", "show");
   void elements.echoCard.offsetWidth;
@@ -3929,8 +3898,7 @@ function renderHistory() {
   }
 
   if (!state.entries.length) {
-    elements.historyList.innerHTML =
-      '<p style="text-align:center;margin-top:40px;opacity:.5;">还没有记录</p>';
+    elements.historyList.innerHTML = '<p class="history-empty">还没有留下什么。</p>';
     return;
   }
 
@@ -3972,17 +3940,8 @@ function renderHistory() {
     const echoNode = node.querySelector(".history-echo-text");
     const secondaryNode = node.querySelector(".history-secondary");
     textNode.textContent = summarizeHistoryContent(entry.content || "[空白记录]");
-    const echoSummary = entry.system?.echo?.l1
-      ? `${entry.system.echo.l1} ${entry.system.echo.l2 || ""}`.trim()
-      : summarizeHistoryEcho(
-          [
-            entry.analysis?.response?.echo,
-            entry.analysis?.response?.question,
-            entry.analysis?.response?.pattern_hint,
-          ].filter(Boolean),
-        );
     const flashbackSummary = entry.system?.flashback || "";
-    const secondarySummary = flashbackSummary || echoSummary;
+    const secondarySummary = flashbackSummary;
     if (echoNode && secondaryNode && secondarySummary) {
       echoNode.textContent = secondarySummary;
       secondaryNode.classList.remove("hidden");
@@ -4078,9 +4037,28 @@ function renderGraph() {
   }
 
   canvas.width = canvas.offsetWidth;
-  canvas.height = 320;
+  canvas.height = 220;
 
-  const graph = buildGraph(state.entries);
+  const fullGraph = buildGraph(state.entries);
+  const latestEntry = state.entries[0] || null;
+  const latestKeys = [...(latestEntry?.tags?.keywords || [])];
+  if (latestEntry?.metadata?.anchor) latestKeys.push(latestEntry.metadata.anchor);
+
+  const rankedNodes = Object.values(fullGraph.nodes).sort((left, right) => right.weight - left.weight);
+  const keepIds = new Set(rankedNodes.slice(0, 10).map((node) => node.id));
+  latestKeys.forEach((key) => keepIds.add(key));
+
+  const graph = { nodes: {}, edges: {} };
+  keepIds.forEach((id) => {
+    if (fullGraph.nodes[id]) graph.nodes[id] = { ...fullGraph.nodes[id] };
+  });
+  Object.entries(fullGraph.edges).forEach(([edgeKey, weight]) => {
+    const [sourceId, targetId] = edgeKey.split("-");
+    if (graph.nodes[sourceId] && graph.nodes[targetId]) {
+      graph.edges[edgeKey] = weight;
+    }
+  });
+
   layoutGraph(graph, canvas);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -4094,31 +4072,22 @@ function renderGraph() {
     ctx.beginPath();
     ctx.moveTo(source.x, source.y);
     ctx.lineTo(target.x, target.y);
-    ctx.strokeStyle = `rgba(200,200,200,${Math.min(weight * 0.08, 0.22)})`;
-    ctx.lineWidth = Math.min(weight, 2.4);
+    ctx.strokeStyle = `rgba(180,180,180,${Math.min(weight * 0.06, 0.14)})`;
+    ctx.lineWidth = Math.min(1.2 + (weight * 0.18), 1.8);
     ctx.stroke();
   });
 
-  const textColor = getComputedStyle(document.body).getPropertyValue("--text-secondary").trim()
-    || getComputedStyle(document.body).getPropertyValue("--text-primary").trim()
-    || "#fff";
-
   Object.values(graph.nodes).forEach((node) => {
-    const size = Math.min(node.weight * 1.8, 16);
+    const size = Math.min(3.8 + (node.weight * 1.18), 10);
+    const isCurrent = latestKeys.includes(node.id);
 
     ctx.beginPath();
     ctx.arc(node.x, node.y, size, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(220,220,220,0.62)";
+    ctx.fillStyle = isCurrent ? "rgba(220,220,220,0.46)" : "rgba(220,220,220,0.28)";
     ctx.fill();
-
-    ctx.fillStyle = textColor;
-    ctx.globalAlpha = 0.72;
-    ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-    ctx.fillText(node.id, node.x + size + 3, node.y + 1);
-    ctx.globalAlpha = 1;
   });
 
-  highlightCurrentNode(graph, state.entries[0]);
+  highlightCurrentNode(graph, latestEntry);
 }
 
 function highlightCurrentNode(graph, latestEntry, timestamp = 0) {
@@ -4136,8 +4105,8 @@ function highlightCurrentNode(graph, latestEntry, timestamp = 0) {
     if (!node) return;
 
     ctx.beginPath();
-    ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.arc(node.x, node.y, 14, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
     ctx.stroke();
   });
 }
@@ -4383,39 +4352,47 @@ function renderInsightViewV2() {
 function buildHistoryNarrative(entries) {
   if (!entries?.length) return "这里还没有留下什么。";
 
-  const recent = entries.slice(0, 8);
+  const latest = entries[0];
+  const observation = latest.analysis?.observation;
+  const primaryClass =
+    observation?.outputReadiness?.history?.narrativeAnchor
+    || observation?.outputReadiness?.echo?.primaryClass
+    || "";
+  const repeatedTheme = observation?.layers?.longitudinalMemory?.patterns?.repeatedTheme || "";
   const graph = buildGraph(entries);
   const metrics = getGraphMetrics(graph);
-  const topNode = metrics.topNode?.id || "此刻";
-  const latestAnchor = recent[0]?.metadata?.anchor || "";
-  const inertia = calculateTrendInertia(entries);
-  const avgFriction = recent.reduce((sum, entry) => sum + (entry.context?.friction || 0), 0) / recent.length;
-  const lateNightCount = recent.filter((entry) => entry.context?.timePhase === "深夜").length;
-  const openLoopCount = recent.filter((entry) =>
-    ["想", "应该", "但是"].some((anchor) => (entry.content || "").includes(anchor)),
-  ).length;
+  const topic = repeatedTheme || metrics.topNode?.id || latest.metadata?.anchor || "这里";
+  const topicSpot = topic === "这里" ? topic : `「${topic}」`;
 
-  if (inertia.type === "up") {
-    return `最近的记录正慢慢往前走，但还是常常回到「${topNode}」。`;
+  if (["looping", "unresolved_return", "night_return"].includes(primaryClass)) {
+    return `最近还是会绕回${topicSpot}。`;
   }
 
-  if (inertia.type === "down" && (avgFriction >= 8 || latestAnchor === "沉缩" || latestAnchor === "焦滞")) {
-    return `最近的记录往里收了一些，还是没有离开「${topNode}」。`;
+  if (["held_back_core", "unfinished_meaning"].includes(primaryClass)) {
+    return `${topicSpot}还停在没有说透的地方。`;
   }
 
-  if (lateNightCount >= 4 || openLoopCount >= 4) {
-    return `最近的记录总在同一个位置附近停住，还绕着「${topNode}」。`;
+  if (primaryClass === "pre_start_loop") {
+    return `${topicSpot}总停在开始之前。`;
   }
 
-  if (latestAnchor === "游离") {
-    return `最近的记录有些散开，却还是围着「${topNode}」打转。`;
+  if (["drift", "narrative_drift", "fragmentation"].includes(primaryClass)) {
+    return `最近有些散开，重心还在${topicSpot}附近。`;
   }
 
-  if (latestAnchor === "澄明") {
-    return `最近的记录开始有了方向，但还牵着「${topNode}」。`;
+  if (["withdrawal", "emotional_compression"].includes(primaryClass)) {
+    return `最近往里收了一些，${topicSpot}还没有退下去。`;
   }
 
-  return `最近的记录一直回到「${topNode}」，它还留在这里。`;
+  if (["fragile_loosening", "integration_attempt", "recovery_direction", "temporary_stabilization"].includes(primaryClass)) {
+    return `最近开始松动一点，但还是牵着${topicSpot}。`;
+  }
+
+  if (["role_pressure", "identity_strain", "identity_performance_pressure", "recurring_social_pressure"].includes(primaryClass)) {
+    return `最近总有别的要求压下来，还是会回到${topicSpot}。`;
+  }
+
+  return `最近的记录还是会回到${topicSpot}。`;
 }
 
 function loadEntryForEdit(id) {
@@ -4432,8 +4409,11 @@ function loadEntryForEdit(id) {
   });
 
   elements.historyPanel.classList.add("hidden");
+  elements.historyPanel.classList.remove("is-closing");
+  elements.historyPanel.setAttribute("aria-hidden", "true");
   state.historyOpen = false;
   elements.rawMemoryInput.focus();
+  hideEchoCard(true);
   renderEchoBlock(entry.analysis?.response || { echo: "", question: "", pattern_hint: "" });
 }
 
@@ -4466,7 +4446,6 @@ function showView(viewName) {
   if (elements.unlockView) elements.unlockView.classList.toggle("hidden", viewName !== "unlock");
   elements.onboardingView.classList.toggle("hidden", viewName !== "onboarding");
   elements.composeView.classList.toggle("hidden", viewName !== "compose");
-  elements.globalTools.classList.toggle("hidden", viewName === "onboarding" || viewName === "unlock");
 
   if (viewName === "onboarding") {
     animateTraceMark(elements.onboardingTraceMark, "is-sealing", MOTION.logoSealMs);

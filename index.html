@@ -15,7 +15,7 @@
     <link rel="icon" href="./trace-logo-black.png">
     <link rel="apple-touch-icon" href="./trace-logo-black.png">
     
-    <link rel="stylesheet" href="./styles.css?v=20260402-2" />
+    <link rel="stylesheet" href="./styles.css?v=20260402-3" />
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -28,15 +28,6 @@
     </script>
   </head>
   <body class="time-day runtime-pending">
-    <nav id="global-tools" class="hidden">
-      <input type="file" id="import-file-input" accept=".json" style="display: none;" />
-      <button id="font-toggle-btn" class="ghost-btn" type="button">字体</button>
-      <button id="vault-toggle-btn" class="ghost-btn" type="button">保险库</button>
-      <button id="import-data-btn" class="ghost-btn" type="button">导入</button>
-      <button id="export-data-btn" class="ghost-btn" type="button">导出</button>
-      <button id="history-toggle" class="ghost-btn" type="button">历史</button>
-    </nav>
-
     <div id="trace-loading" class="trace-loading hidden" aria-live="polite" aria-atomic="true">
       <img
         id="trace-loading-mark"
@@ -113,10 +104,8 @@
 
       <section id="compose-view" class="view-section hidden">
         <div class="compose-shell">
-          <aside id="system-echo-panel" class="echo-panel empty" aria-live="polite"></aside>
           <div id="echo-card-layer" class="echo-card-layer" aria-live="polite" aria-atomic="true">
             <article id="echo-card" class="echo-card hidden">
-              <button id="echo-card-close" class="echo-card-close" type="button" aria-label="关闭">×</button>
               <p id="echo-card-line-1" class="echo-card-line"></p>
               <p id="echo-card-line-2" class="echo-card-line"></p>
               <p id="echo-card-line-3" class="echo-card-line echo-card-tail"></p>
@@ -139,7 +128,7 @@
                 />
                 <span class="paper-kicker">现在</span>
               </div>
-              <span id="font-style-label" class="paper-meta">默认</span>
+              <button id="history-toggle" class="paper-link-btn" type="button">回看</button>
             </div>
             <textarea
               id="raw-memory-input"
@@ -147,28 +136,18 @@
               placeholder="写下此刻。"
               autofocus
             ></textarea>
-            
-            <div id="cognitive-anchors" class="anchor-bar">
-              <button class="anchor-btn" data-anchor="澄明">清楚</button>
-              <button class="anchor-btn" data-anchor="游离">发散</button>
-              <button class="anchor-btn" data-anchor="焦滞">卡住</button>
-              <button class="anchor-btn" data-anchor="沉缩">低落</button>
-            </div>
           </article>
 
           <div class="compose-footer">
             <span id="save-status" class="status-indicator"></span>
-            <div class="footer-actions">
-              <button id="swallow-btn" class="subtle-submit-btn" type="button">略过</button>
-              <button id="save-entry-btn" class="subtle-submit-btn" type="button">保存</button>
-            </div>
+            <button id="save-entry-btn" class="subtle-submit-btn" type="button">留下</button>
           </div>
         </div>
       </section>
 
       <aside id="history-panel" class="history-panel hidden" aria-hidden="true">
         <div class="history-header">
-          <h2>历史记录</h2>
+          <h2>回看</h2>
           <button id="close-history-btn" class="close-btn" type="button">返回</button>
         </div>
         
@@ -185,20 +164,20 @@
 
     <template id="history-entry-template">
       <article class="history-item">
-        <div class="history-primary">
-          <div class="history-meta">
-            <time class="history-time"></time>
-            <span class="history-metadata hidden"></span>
-            <button class="history-delete-btn" type="button">删除</button>
+          <div class="history-primary">
+            <div class="history-meta">
+              <time class="history-time"></time>
+              <span class="history-metadata hidden"></span>
+              <button class="history-delete-btn" type="button" aria-label="删除记录">删除</button>
+            </div>
+            <p class="history-raw-text"></p>
           </div>
-          <p class="history-raw-text"></p>
-        </div>
         <div class="history-secondary hidden">
           <p class="history-echo-text"></p>
         </div>
       </article>
     </template>
 
-    <script src="./app.js?v=20260402-2"></script>
+    <script src="./app.js?v=20260402-3"></script>
   </body>
 </html>
