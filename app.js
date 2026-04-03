@@ -637,6 +637,7 @@ let state = {
   draftRefined: false,
   draftHadTextBeforeVoice: false,
   pendingSubmitAfterVoice: false,
+  isComposingText: false,
 };
 
 function createImplicitSession() {
@@ -697,6 +698,8 @@ const voiceState = {
   transcribing: false,
   didCaptureFinal: false,
   interimTranscript: "",
+  starting: false,
+  permission: "unknown",
   sessionChars: 0,
 };
 
@@ -3418,18 +3421,57 @@ function setStatusMessage(text = "", timeout = 0) {
   }
 }
 
+function syncTextCompositionState() {
+  document.body.classList.toggle("text-composing-mode", Boolean(state.isComposingText));
+}
+
+function resolveVoiceSurfaceState() {
+  if (voiceState.starting) return "starting";
+  if (voiceState.listening) return "listening";
+  if (voiceState.transcribing) return "transcribing";
+  return "idle";
+}
+
 function syncExpressiveModeState() {
-  const liveVoiceMode = voiceState.listening || voiceState.transcribing;
-  document.body.classList.toggle("listening-mode", liveVoiceMode);
-  document.body.classList.toggle("spoken-mode", liveVoiceMode);
-  document.body.dataset.inputMode = liveVoiceMode ? INPUT_MODES.voice : INPUT_MODES.text;
+  const voiceSurfaceState = resolveVoiceSurfaceState();
+  const voiceActive = voiceSurfaceState !== "idle";
+  document.body.classList.toggle("voice-starting-mode", voiceSurfaceState === "starting");
+  document.body.classList.toggle("listening-mode", voiceSurfaceState === "listening");
+  document.body.classList.toggle("transcribing-mode", voiceSurfaceState === "transcribing");
+  document.body.classList.toggle("spoken-mode", voiceActive);
+  document.body.dataset.voiceState = voiceSurfaceState;
+  document.body.dataset.inputMode = voiceActive ? INPUT_MODES.voice : INPUT_MODES.text;
+  syncTextCompositionState();
+}
+
+function flashControlHubReceipt() {
+  if (!elements.controlHub) return;
+  elements.controlHub.classList.remove("is-received");
+  window.requestAnimationFrame(() => {
+    elements.controlHub.classList.add("is-received");
+    if (flashControlHubReceipt._timer) {
+      window.clearTimeout(flashControlHubReceipt._timer);
+    }
+    flashControlHubReceipt._timer = window.setTimeout(() => {
+      elements.controlHub?.classList.remove("is-received");
+      flashControlHubReceipt._timer = null;
+    }, 620);
+  });
 }
 
 function resolveVoiceEntryCopy() {
+  if (voiceState.starting) {
+    return {
+      label: "先让这里听见你",
+      help: "等一下。",
+      pressed: true,
+    };
+  }
+
   if (voiceState.transcribing) {
     return {
-      label: "刚才那句，正在变成字",
-      help: "等一下。",
+      label: "刚才那句，正在落下来",
+      help: "别急，字在跟上。",
       pressed: true,
     };
   }
@@ -3437,14 +3479,14 @@ function resolveVoiceEntryCopy() {
   if (voiceState.listening) {
     return {
       label: "正在听，点一下停住",
-      help: "现在先说出来。",
+      help: "现在这句，会直接留下。",
       pressed: true,
     };
   }
 
   return {
     label: "点一下说出来",
-    help: "不想打字时，也可以直接说。",
+    help: "也可以直接说。",
     pressed: false,
   };
 }
@@ -3462,9 +3504,7 @@ function syncControlHub() {
   if (elements.controlVoice && elements.voiceEntryLabel && elements.voiceEntryHelp) {
     const voiceCopy = resolveVoiceEntryCopy();
     elements.controlVoice.setAttribute("aria-pressed", String(voiceCopy.pressed));
-    elements.controlVoice.dataset.state = voiceState.transcribing
-      ? "transcribing"
-      : (voiceState.listening ? "listening" : "idle");
+    elements.controlVoice.dataset.state = resolveVoiceSurfaceState();
     elements.voiceEntryLabel.textContent = voiceCopy.label;
     elements.voiceEntryHelp.textContent = voiceCopy.help;
   }
@@ -3492,6 +3532,12 @@ function syncReviewTools() {
   elements.ambientSoundButtons.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.ambientSound === state.ambientSoundLevel);
   });
+}
+
+function syncHistoryChrome() {
+  if (!elements.historyPanel) return;
+  const condensed = state.historyOpen && elements.historyPanel.scrollTop > 36;
+  elements.historyPanel.classList.toggle("is-condensed", condensed);
 }
 
 function setReviewToolsOpen(open) {
@@ -3567,6 +3613,8 @@ function openHistory() {
   setAnchorPickerOpen(false);
   setControlHubOpen(false);
   renderHistory();
+  syncHistoryChrome();
+  window.requestAnimationFrame(syncHistoryChrome);
   noteAmbientActivity();
   syncAmbientPresence();
 }
@@ -3695,7 +3743,9 @@ function getAmbientPresenceProfile() {
 
   if (state.controlHubOpen || state.anchorPickerOpen) intensity *= 1.08;
   if (state.historyOpen) intensity *= 1.18;
+  if (voiceState.starting) intensity *= 0.84;
   if (voiceState.listening) intensity *= 0.74;
+  if (voiceState.transcribing) intensity *= 0.82;
 
   const idleMs = Date.now() - ambientLastActivityAt;
   if (idleMs > 16000) intensity *= 1.1;
@@ -4298,6 +4348,13 @@ function commitVoiceTranscript(transcript, { message = "刚才说的，记下了
 }
 
 function stopVoiceCapture({ silent = false } = {}) {
+  if (voiceState.starting && !voiceState.listening && !voiceState.transcribing) {
+    voiceState.starting = false;
+    syncControlHub();
+    syncAmbientPresence({ immediate: true });
+    return;
+  }
+
   if (!recognition || (!voiceState.listening && !voiceState.transcribing)) {
     voiceState.listening = false;
     voiceState.transcribing = false;
@@ -4341,6 +4398,8 @@ function initVoiceRecognition() {
 
   recognition.onstart = () => {
     noteSessionVoiceStart();
+    voiceState.starting = false;
+    voiceState.permission = "granted";
     voiceState.listening = true;
     voiceState.transcribing = false;
     voiceState.didCaptureFinal = false;
@@ -4375,6 +4434,7 @@ function initVoiceRecognition() {
   };
 
   recognition.onerror = (event) => {
+    voiceState.starting = false;
     voiceState.listening = false;
     voiceState.transcribing = false;
     voiceState.didCaptureFinal = false;
@@ -4382,13 +4442,23 @@ function initVoiceRecognition() {
     voiceState.sessionChars = 0;
 
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-      setStatusMessage("这里还不能直接说", 1800);
+      voiceState.permission = "denied";
+      setStatusMessage("先让浏览器听见你", 2200);
+      syncControlHub();
+      syncAmbientPresence({ immediate: true });
+      return;
+    }
+
+    if (event.error === "audio-capture") {
+      voiceState.permission = "missing";
+      setStatusMessage("这里没听见你", 1800);
       syncControlHub();
       syncAmbientPresence({ immediate: true });
       return;
     }
 
     if (event.error === "no-speech") {
+      voiceState.permission = "granted";
       noteSessionVoiceInterruption();
       setStatusMessage("刚刚没听清", 1400);
       syncControlHub();
@@ -4398,11 +4468,13 @@ function initVoiceRecognition() {
 
     if (event.error === "aborted") {
       state.pendingSubmitAfterVoice = false;
+      syncControlHub();
+      syncAmbientPresence({ immediate: true });
       return;
     }
 
     state.pendingSubmitAfterVoice = false;
-    setStatusMessage("这里还不能直接说", 1800);
+    setStatusMessage("这会儿没听见", 1800);
     syncControlHub();
     syncAmbientPresence({ immediate: true });
   };
@@ -4411,6 +4483,7 @@ function initVoiceRecognition() {
     const wasListening = voiceState.listening;
     const hadFinal = voiceState.didCaptureFinal;
     const fallbackTranscript = voiceState.interimTranscript;
+    voiceState.starting = false;
     voiceState.listening = false;
     voiceState.transcribing = false;
 
@@ -4439,29 +4512,116 @@ function initVoiceRecognition() {
   };
 }
 
-function startVoiceCapture() {
-  if (!voiceState.supported) {
-    setStatusMessage("这里还不能直接说", 1800);
-    return;
+async function ensureVoiceAccess() {
+  if (!SpeechRecognitionCtor) {
+    voiceState.supported = false;
+    voiceState.permission = "unsupported";
+    setStatusMessage("这个浏览器还不能直接说", 2200);
+    syncControlHub();
+    return false;
   }
 
-  if (voiceState.transcribing) {
-    return;
+  if (
+    !window.isSecureContext
+    && window.location.hostname !== "localhost"
+    && window.location.hostname !== "127.0.0.1"
+  ) {
+    voiceState.permission = "blocked";
+    setStatusMessage("这里得在安全连接里说", 2200);
+    syncControlHub();
+    return false;
   }
 
-  initVoiceRecognition();
-  if (!recognition) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    voiceState.supported = false;
+    voiceState.permission = "unsupported";
+    setStatusMessage("这个浏览器还不能直接说", 2200);
+    syncControlHub();
+    return false;
+  }
+
+  if (voiceState.permission === "granted") {
+    voiceState.supported = true;
+    return true;
+  }
+
+  voiceState.supported = true;
+  voiceState.starting = true;
+  setStatusMessage("先让这里听见你", 0);
+  syncControlHub();
+  syncAmbientPresence({ immediate: true });
+  let granted = false;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+    voiceState.permission = "granted";
+    granted = true;
+    return true;
+  } catch (error) {
+    if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
+      voiceState.permission = "denied";
+      setStatusMessage("先让浏览器听见你", 2200);
+    } else if (error?.name === "NotFoundError" || error?.name === "DevicesNotFoundError") {
+      voiceState.permission = "missing";
+      setStatusMessage("这里没听见你", 1800);
+    } else {
+      voiceState.permission = "blocked";
+      setStatusMessage("这里还不能直接说", 1800);
+    }
+    return false;
+  } finally {
+    if (!granted && !voiceState.listening && !voiceState.transcribing) {
+      voiceState.starting = false;
+      syncControlHub();
+      syncAmbientPresence({ immediate: true });
+    }
+  }
+}
+
+async function startVoiceCapture() {
+  if (voiceState.transcribing || voiceState.starting) {
+    return;
+  }
 
   if (voiceState.listening) {
     stopVoiceCapture();
     return;
   }
 
+  const ready = await ensureVoiceAccess();
+  if (!ready) {
+    return;
+  }
+
+  initVoiceRecognition();
+  if (!recognition) {
+    voiceState.supported = false;
+    voiceState.permission = "unsupported";
+    setStatusMessage("这个浏览器还不能直接说", 2200);
+    syncControlHub();
+    return;
+  }
+
   try {
+    voiceState.starting = true;
     noteAmbientActivity();
+    setStatusMessage("先让这里听见你", 0);
+    syncControlHub();
+    syncAmbientPresence({ immediate: true });
     recognition.start();
-  } catch {
-    setStatusMessage("这里还不能直接说", 1800);
+  } catch (error) {
+    voiceState.starting = false;
+    if (error?.name === "InvalidStateError") {
+      syncControlHub();
+      return;
+    }
+    setStatusMessage(
+      voiceState.permission === "denied" ? "先让浏览器听见你" : "这里还不能直接说",
+      2200,
+    );
+    syncControlHub();
+    syncAmbientPresence({ immediate: true });
   }
 }
 
@@ -4644,6 +4804,10 @@ function bindEvents() {
   });
 
   elements.rawMemoryInput.addEventListener("keydown", (event) => {
+    if (state.isComposingText || event.isComposing) {
+      noteAmbientActivity();
+      return;
+    }
     implicitSession.hasTyped = true;
     if (event.key === "Backspace" || event.key === "Delete") {
       noteSessionInputActivity("delete");
@@ -4655,7 +4819,26 @@ function bindEvents() {
     }
   });
 
+  elements.rawMemoryInput.addEventListener("compositionstart", () => {
+    state.isComposingText = true;
+    syncTextCompositionState();
+    noteAmbientActivity();
+  });
+
+  elements.rawMemoryInput.addEventListener("compositionend", (event) => {
+    state.isComposingText = false;
+    state.draft = event.target.value;
+    window.localStorage.setItem(DRAFT_KEY, state.draft);
+    syncTextCompositionState();
+    noteAmbientActivity();
+  });
+
   elements.rawMemoryInput.addEventListener("input", (event) => {
+    if (state.isComposingText) {
+      state.draft = event.target.value;
+      window.localStorage.setItem(DRAFT_KEY, state.draft);
+      return;
+    }
     noteSessionInputActivity("input");
     noteTypedDraftMutation();
     state.draft = event.target.value;
@@ -4735,6 +4918,13 @@ function bindEvents() {
     });
   }
 
+  if (elements.historyPanel) {
+    elements.historyPanel.addEventListener("scroll", () => {
+      if (!state.historyOpen) return;
+      syncHistoryChrome();
+    });
+  }
+
   elements.readingFontButtons.forEach((button) => {
     button.addEventListener("click", () => {
       setReadingFont(button.dataset.readingFont || "system");
@@ -4775,7 +4965,7 @@ function bindEvents() {
       return;
     }
 
-    if (event.key === "Escape" && voiceState.listening) {
+    if (event.key === "Escape" && (voiceState.starting || voiceState.listening || voiceState.transcribing)) {
       event.preventDefault();
       stopVoiceCapture();
       return;
@@ -4833,6 +5023,7 @@ function bindEvents() {
     insightResizeTimer = window.setTimeout(() => {
       if (state.historyOpen) {
         renderInsightViewV2();
+        syncHistoryChrome();
       }
     }, 120);
   });
@@ -4909,6 +5100,7 @@ async function submitEntry() {
   elements.saveStatus.textContent = "收着…";
   animateTraceMark(elements.composeTraceMark, "is-sealing", MOTION.logoSealMs);
   playTraceFeedback();
+  flashControlHubReceipt();
 
   await saveEntryRecord(entry);
   upsertStateEntry(entry);
@@ -4973,10 +5165,12 @@ function resetComposeState() {
   state.editingId = null;
   state.activeAnchor = null;
   state.pendingSubmitAfterVoice = false;
+  state.isComposingText = false;
   resetDraftInputMode(INPUT_MODES.text);
   resetImplicitSession();
   window.localStorage.removeItem(DRAFT_KEY);
   syncControlHub();
+  syncTextCompositionState();
 }
 
 function triggerSystemEcho() {
@@ -5001,6 +5195,7 @@ function closeHistory({ immediate = false } = {}) {
   if (immediate) {
     elements.historyPanel.classList.add("hidden");
     elements.historyPanel.classList.remove("is-closing");
+    elements.historyPanel.classList.remove("is-condensed");
     if (!elements.composeView.classList.contains("hidden")) {
       elements.rawMemoryInput.focus();
     }
@@ -5015,6 +5210,7 @@ function closeHistory({ immediate = false } = {}) {
   closeHistory._timer = window.setTimeout(() => {
     elements.historyPanel.classList.add("hidden");
     elements.historyPanel.classList.remove("is-closing");
+    elements.historyPanel.classList.remove("is-condensed");
     closeHistory._timer = null;
     if (!elements.composeView.classList.contains("hidden")) {
       elements.rawMemoryInput.focus();

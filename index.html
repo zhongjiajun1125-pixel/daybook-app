@@ -15,7 +15,7 @@
     <link rel="icon" href="./trace-logo-black.png">
     <link rel="apple-touch-icon" href="./trace-logo-black.png">
     
-    <link rel="stylesheet" href="./styles.css?v=20260402-9" />
+    <link rel="stylesheet" href="./styles.css?v=20260403-apple2" />
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -27,7 +27,7 @@
       }
     </script>
   </head>
-  <body class="time-day runtime-pending">
+  <body class="time-day runtime-pending" data-voice-state="idle">
     <div id="trace-loading" class="trace-loading hidden" aria-live="polite" aria-atomic="true">
       <img
         id="trace-loading-mark"
@@ -138,9 +138,9 @@
             <div class="compose-footer">
               <span id="save-status" class="status-indicator" aria-live="polite"></span>
               <div class="voice-zone" aria-label="语音输入">
-                <button id="control-voice" class="voice-entry" type="button" aria-pressed="false">
+                <button id="control-voice" class="voice-entry" type="button" aria-pressed="false" data-state="idle">
                   <span id="voice-entry-label" class="voice-entry-label" aria-live="polite">点一下说出来</span>
-                  <span id="voice-entry-help" class="voice-entry-help" aria-live="polite">不想打字时，也可以直接说。</span>
+                  <span id="voice-entry-help" class="voice-entry-help" aria-live="polite">也可以直接说。</span>
                 </button>
               </div>
               <div id="control-hub" class="control-hub" aria-label="写作操作">
@@ -220,6 +220,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260402-9"></script>
+    <script src="./app.js?v=20260403-apple2"></script>
   </body>
 </html>
