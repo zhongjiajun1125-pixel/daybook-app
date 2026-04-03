@@ -1,12 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr/dist/module/types";
 import { NextResponse, type NextRequest } from "next/server";
+import { hasSupabaseEnv } from "@/lib/env";
 
 const AUTH_ROUTE = "/auth";
 const PUBLIC_FILE = /\.(.*)$/;
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (!hasSupabaseEnv()) {
+    return NextResponse.next();
+  }
 
   if (
     pathname.startsWith("/_next")

@@ -6,6 +6,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-opennext.js",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { buildMockInsights } from "@/lib/ai/mock-insights";
+import { hasSupabaseEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function POST() {
+  if (!hasSupabaseEnv()) {
+    return NextResponse.json(
+      { error: "Supabase environment is not configured." },
+      { status: 503 }
+    );
+  }
+
   const supabase = createSupabaseServerClient();
   const {
     data: { user }
