@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --trace-bg: #f6f5f1;
+  --trace-panel: rgba(255, 255, 255, 0.84);
+  --trace-panel-soft: rgba(255, 255, 255, 0.66);
+  --trace-line: rgba(15, 23, 42, 0.08);
+  --trace-text: #111827;
+  --trace-sub: #4b5563;
+  --trace-ghost: #9ca3af;
+  --trace-accent: rgba(59, 130, 246, 0.12);
+}
+
+.dark {
+  --trace-bg: #17191d;
+  --trace-panel: rgba(29, 32, 39, 0.84);
+  --trace-panel-soft: rgba(29, 32, 39, 0.68);
+  --trace-line: rgba(255, 255, 255, 0.08);
+  --trace-text: #f3f4f6;
+  --trace-sub: #9ca3af;
+  --trace-ghost: #6b7280;
+  --trace-accent: rgba(125, 211, 252, 0.14);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-trace-bg text-trace-text font-sans antialiased;
+  background-image:
+    radial-gradient(circle at top center, rgba(255, 255, 255, 0.75), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent);
+}
+
+.dark body {
+  background-image:
+    radial-gradient(circle at top center, rgba(255, 255, 255, 0.04), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+textarea {
+  resize: none;
+}
+
+.trace-shell {
+  @apply min-h-screen px-8 py-6;
+}
+
+.trace-window {
+  @apply mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1600px] overflow-hidden rounded-shell border border-white/50 bg-trace-panel shadow-shell backdrop-blur-2xl dark:border-white/5;
+}
+
+.trace-noise {
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0));
+}
+
+.quiet-focus {
+  @apply focus-visible:outline-none focus-visible:ring-0;
+}
