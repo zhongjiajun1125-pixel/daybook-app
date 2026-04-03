@@ -42,6 +42,58 @@ npm install
 npm run dev
 ```
 
+## Deploy
+
+当前默认按 **Cloudflare Workers** 部署准备。
+
+### Cloudflare 环境变量
+
+在 Cloudflare Workers / Pages 项目里配置：
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+其中：
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+可以作为普通环境变量。
+
+`SUPABASE_SERVICE_ROLE_KEY` 建议作为 secret。
+
+### Workers scripts
+
+```bash
+npm run cf:build
+npm run cf:preview
+npm run cf:deploy
+```
+
+### 本地 Cloudflare 预览
+
+复制：
+
+```bash
+.dev.vars.example -> .dev.vars
+```
+
+填入同样的 Supabase 变量后再运行 `npm run cf:preview`。
+
+### 数据库初始化
+
+先在 Supabase SQL Editor 执行：
+
+```bash
+supabase/schema.sql
+```
+
+### 备用
+
+仓库里仍保留 `vercel.json`，如果未来要切 Vercel，也不需要重新整理 Next 结构。
+
 ## Database
 
 Supabase SQL 在：
