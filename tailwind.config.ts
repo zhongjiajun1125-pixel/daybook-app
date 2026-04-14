@@ -1,57 +1,37 @@
-import type { Config } from "tailwindcss";
+import type { Config } from "tailwindcss"
 
 const config: Config = {
-  darkMode: ["class"],
-  content: [
-    "./app/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./lib/**/*.{ts,tsx}"
-  ],
+  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
       fontFamily: {
-        sans: [
-          "-apple-system",
-          "BlinkMacSystemFont",
-          "\"SF Pro Text\"",
-          "\"Helvetica Neue\"",
-          "sans-serif"
-        ],
-        serif: [
-          "\"New York\"",
-          "\"Songti SC\"",
-          "\"Source Serif 4\"",
-          "serif"
-        ]
+        sans: ["-apple-system", "BlinkMacSystemFont", "\"SF Pro Text\"", "\"Helvetica Neue\"", "sans-serif"],
+        serif: ["\"Iowan Old Style\"", "\"Source Serif 4\"", "\"Songti SC\"", "serif"]
       },
       boxShadow: {
-        shell: "0 18px 48px rgba(15, 23, 42, 0.08)",
-        pane: "0 10px 24px rgba(15, 23, 42, 0.05)",
-        dock: "0 16px 30px rgba(15, 23, 42, 0.08)"
+        panel: "0 30px 80px rgba(3, 7, 18, 0.42)",
+        soft: "0 18px 44px rgba(15, 23, 42, 0.18)"
       },
       borderRadius: {
-        shell: "28px",
-        pane: "24px",
-        dock: "999px"
+        shell: "32px"
       },
       colors: {
-        trace: {
-          bg: "var(--trace-bg)",
-          panel: "var(--trace-panel)",
-          panelSoft: "var(--trace-panel-soft)",
-          line: "var(--trace-line)",
-          text: "var(--trace-text)",
-          sub: "var(--trace-sub)",
-          ghost: "var(--trace-ghost)",
-          accent: "var(--trace-accent)"
+        board: {
+          bg: "var(--board-bg)",
+          panel: "var(--board-panel)",
+          panelSoft: "var(--board-panel-soft)",
+          line: "var(--board-line)",
+          text: "var(--board-text)",
+          muted: "var(--board-muted)",
+          accent: "var(--board-accent)",
+          accentSoft: "var(--board-accent-soft)",
+          warm: "var(--board-warm)"
         }
-      },
-      transitionTimingFunction: {
-        trace: "cubic-bezier(0.16, 1, 0.3, 1)"
       }
     }
   },
   plugins: []
-};
+}
 
-export default config;
+export default config
+

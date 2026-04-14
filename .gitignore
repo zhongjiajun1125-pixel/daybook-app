@@ -1,10 +1,9 @@
-.DS_Store
 .next
 node_modules
-.env.local
+out
+dist
 coverage
+*.log
+.DS_Store
 tsconfig.tsbuildinfo
-.open-next
-.wrangler
-.dev.vars
-cloudflare-env.d.ts
+

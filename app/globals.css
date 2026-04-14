@@ -3,75 +3,81 @@
 @tailwind utilities;
 
 :root {
-  --trace-bg: #f6f5f1;
-  --trace-panel: rgba(255, 255, 255, 0.84);
-  --trace-panel-soft: rgba(255, 255, 255, 0.66);
-  --trace-line: rgba(15, 23, 42, 0.08);
-  --trace-text: #111827;
-  --trace-sub: #4b5563;
-  --trace-ghost: #9ca3af;
-  --trace-accent: rgba(59, 130, 246, 0.12);
+  --board-bg: #0b1017;
+  --board-panel: rgba(15, 20, 30, 0.8);
+  --board-panel-soft: rgba(255, 255, 255, 0.04);
+  --board-line: rgba(255, 255, 255, 0.08);
+  --board-text: #f5f7fb;
+  --board-muted: rgba(225, 231, 240, 0.7);
+  --board-accent: #d7dce5;
+  --board-accent-soft: rgba(215, 220, 229, 0.08);
+  --board-warm: #cdbb9f;
 }
 
-.dark {
-  --trace-bg: #17191d;
-  --trace-panel: rgba(29, 32, 39, 0.84);
-  --trace-panel-soft: rgba(29, 32, 39, 0.68);
-  --trace-line: rgba(255, 255, 255, 0.08);
-  --trace-text: #f3f4f6;
-  --trace-sub: #9ca3af;
-  --trace-ghost: #6b7280;
-  --trace-accent: rgba(125, 211, 252, 0.14);
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 html,
 body {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
-  @apply bg-trace-bg text-trace-text font-sans antialiased;
-  background-image:
-    radial-gradient(circle at top center, rgba(255, 255, 255, 0.75), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent);
+  margin: 0;
+  color: var(--board-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01" 1, "cv11" 1;
+  background:
+    radial-gradient(circle at top center, rgba(255, 255, 255, 0.06), transparent 32%),
+    radial-gradient(circle at 20% 0%, rgba(205, 187, 159, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 24%),
+    var(--board-bg);
 }
 
-.dark body {
-  background-image:
-    radial-gradient(circle at top center, rgba(255, 255, 255, 0.04), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.8;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%),
+    radial-gradient(circle at bottom center, rgba(255, 255, 255, 0.04), transparent 40%);
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+a {
+  color: inherit;
 }
 
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-*::-webkit-scrollbar-thumb {
-  background: transparent;
+button,
+textarea {
+  font: inherit;
 }
 
 textarea {
   resize: none;
 }
 
-.trace-shell {
-  @apply min-h-screen px-8 py-6;
+button {
+  cursor: pointer;
 }
 
-.trace-window {
-  @apply mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1600px] overflow-hidden rounded-shell border border-white/50 bg-trace-panel shadow-shell backdrop-blur-2xl dark:border-white/5;
+::selection {
+  background: rgba(215, 220, 229, 0.22);
 }
 
-.trace-noise {
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0));
-}
-
-.quiet-focus {
-  @apply focus-visible:outline-none focus-visible:ring-0;
+.glass-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.012)),
+    var(--board-panel);
+  border: 1px solid var(--board-line);
+  box-shadow: 0 20px 50px rgba(3, 7, 18, 0.28);
+  backdrop-filter: blur(22px);
 }

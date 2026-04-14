@@ -1,21 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata } from "next"
+import type { ReactNode } from "react"
 
-import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
+import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "TRACE",
-  description: "A quiet thought capture environment."
-};
+  title: "Objective Thinking Board",
+  description: "从模糊想法出发，生成结构化认知与可执行路径。"
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
-      <body>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {children}
-        </ThemeProvider>
-      </body>
+    <html lang="zh-CN">
+      <body>{children}</body>
     </html>
-  );
+  )
 }
