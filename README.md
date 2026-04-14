@@ -1,6 +1,6 @@
-# Objective Thinking Board
+# TRACE
 
-一个从模糊想法出发，把认知拆解成结构与行动路径的单页产品站。
+一个从模糊想法出发，把认知拆解成结构与行动路径的思考工作台原型。
 
 ## Stack
 
@@ -21,4 +21,3 @@ npm run dev
 npm run typecheck
 npm run build
 ```
-

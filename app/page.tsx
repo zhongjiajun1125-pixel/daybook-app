@@ -781,8 +781,8 @@ export default function HomePage() {
       <div className="mx-auto max-w-[1600px] px-5 py-6 sm:px-6 md:px-8 lg:px-10">
         <header className="flex flex-col gap-4 border-b border-white/10 pb-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.28em] text-white/[0.34]">Objective Thinking Board / Workspace</div>
-            <h1 className="mt-2 font-serif text-3xl tracking-tight text-white md:text-[2.45rem]">Objective Thinking Board</h1>
+            <div className="text-[11px] uppercase tracking-[0.28em] text-white/[0.34]">TRACE / Workspace</div>
+            <h1 className="mt-2 font-serif text-3xl tracking-tight text-white md:text-[2.45rem]">TRACE</h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-sm text-white/[0.6]">
