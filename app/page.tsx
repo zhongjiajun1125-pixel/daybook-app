@@ -38,6 +38,12 @@ type PlanBase = {
   guardrail: string
 }
 
+type ExecutionProgress = {
+  todayChecked: string[]
+  weekChecked: string[]
+  updatedAt: string | null
+}
+
 type WorkspaceTemplate = {
   templateId: string | null
   title: string
@@ -77,12 +83,29 @@ type WorkspaceRecord = {
   selectedPathId: string
   planBase: PlanBase
   resources: Resource[]
+  execution: Record<string, ExecutionProgress>
   review: {
     status: ReviewStatus
     note: string
     updatedAt: string | null
   }
 }
+
+type PersistedWorkspaceState = {
+  version: number
+  records: WorkspaceRecord[]
+  selectedRecordId: string
+  draft: string
+  mode: Mode
+  activeChip: string
+  reviewStatus: ReviewStatus
+  reviewDraft: string
+  nextRunNumber: number
+  historyQuery: string
+  lastSavedAt: string | null
+}
+
+const STORAGE_KEY = "trace-workspace-v2"
 
 const modeMeta: Record<Mode, { label: string; note: string; action: string }> = {
   deep: {
@@ -432,6 +455,53 @@ function normalizeText(value: string) {
   return value.trim().replace(/\s+/g, " ")
 }
 
+function isMode(value: unknown): value is Mode {
+  return value === "deep" || value === "action"
+}
+
+function isReviewStatus(value: unknown): value is ReviewStatus {
+  return value === "not_started" || value === "in_progress" || value === "completed" || value === "blocked"
+}
+
+function createEmptyExecutionProgress(): ExecutionProgress {
+  return {
+    todayChecked: [],
+    weekChecked: [],
+    updatedAt: null
+  }
+}
+
+function buildExecutionMap(
+  paths: PathOption[],
+  existing?: Record<string, Partial<ExecutionProgress> | undefined>
+): Record<string, ExecutionProgress> {
+  return Object.fromEntries(
+    paths.map((path) => [
+      path.id,
+      {
+        todayChecked: existing?.[path.id]?.todayChecked ?? [],
+        weekChecked: existing?.[path.id]?.weekChecked ?? [],
+        updatedAt: existing?.[path.id]?.updatedAt ?? null
+      }
+    ])
+  )
+}
+
+function getNextRunNumber(records: WorkspaceRecord[]) {
+  const highest = records.reduce((max, record) => {
+    const match = /run-(\d+)/.exec(record.id)
+    const number = match ? Number(match[1]) : 0
+
+    return Number.isFinite(number) ? Math.max(max, number) : max
+  }, 100)
+
+  return highest + 1
+}
+
+function toggleEntry(list: string[], item: string) {
+  return list.includes(item) ? list.filter((entry) => entry !== item) : [...list, item]
+}
+
 function pickScenario(text: string) {
   const lower = text.trim().toLowerCase()
 
@@ -551,6 +621,7 @@ function buildRecordFromText(
     createdAt: string
     parentId?: string | null
     preferredPathId?: string | null
+    execution?: Record<string, Partial<ExecutionProgress>>
     review?: Partial<WorkspaceRecord["review"]>
   }
 ) {
@@ -583,6 +654,7 @@ function buildRecordFromText(
     selectedPathId,
     planBase: template.planBase,
     resources: template.resources,
+    execution: buildExecutionMap(template.paths, options.execution),
     review: {
       status: options.review?.status ?? "not_started",
       note: options.review?.note ?? "",
@@ -630,8 +702,13 @@ function getSelectedPath(record: WorkspaceRecord) {
   return record.paths.find((path) => path.id === record.selectedPathId) ?? record.paths[0]
 }
 
-function deriveActionPlan(record: WorkspaceRecord) {
-  const selectedPath = getSelectedPath(record)
+function getExecutionProgress(record: WorkspaceRecord, pathId = record.selectedPathId) {
+  return record.execution[pathId] ?? createEmptyExecutionProgress()
+}
+
+function deriveActionPlan(record: WorkspaceRecord, pathId = record.selectedPathId) {
+  const selectedPath = record.paths.find((path) => path.id === pathId) ?? getSelectedPath(record)
+  const execution = getExecutionProgress(record, selectedPath.id)
 
   return {
     selectedPath,
@@ -639,12 +716,31 @@ function deriveActionPlan(record: WorkspaceRecord) {
     thisWeek: [selectedPath.weeklyFocus, ...record.planBase.thisWeek],
     metric: record.planBase.metric,
     guardrail: record.planBase.guardrail,
-    reviewTrigger: selectedPath.reviewTrigger
+    reviewTrigger: selectedPath.reviewTrigger,
+    execution
   }
 }
 
+function getCompletionSummary(record: WorkspaceRecord, pathId = record.selectedPathId) {
+  const plan = deriveActionPlan(record, pathId)
+  const completed = plan.execution.todayChecked.length + plan.execution.weekChecked.length
+  const total = plan.today.length + plan.thisWeek.length
+
+  return {
+    completed,
+    total
+  }
+}
+
+function hydrateStoredRecord(record: WorkspaceRecord) {
+  return {
+    ...record,
+    execution: buildExecutionMap(record.paths, record.execution)
+  } satisfies WorkspaceRecord
+}
+
 export default function HomePage() {
-  const initialRecords = useMemo(() => buildSeedRecords(), [])
+  const initialRecords = useMemo(() => buildSeedRecords().map(hydrateStoredRecord), [])
   const [records, setRecords] = useState(initialRecords)
   const [selectedRecordId, setSelectedRecordId] = useState(initialRecords[0]?.id ?? "")
   const [draft, setDraft] = useState(initialRecords[0]?.thought.body ?? scenarios[0].prompt)
@@ -652,8 +748,11 @@ export default function HomePage() {
   const [activeChip, setActiveChip] = useState<string>(initialRecords[0]?.templateId ?? "")
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>(initialRecords[0]?.review.status ?? "not_started")
   const [reviewDraft, setReviewDraft] = useState(initialRecords[0]?.review.note ?? "")
-  const [nextRunNumber, setNextRunNumber] = useState(104)
+  const [historyQuery, setHistoryQuery] = useState("")
+  const [nextRunNumber, setNextRunNumber] = useState(getNextRunNumber(initialRecords))
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
+  const hasHydratedWorkspace = useRef(false)
 
   const selectedRecord = useMemo(
     () => records.find((record) => record.id === selectedRecordId) ?? records[0],
@@ -661,26 +760,101 @@ export default function HomePage() {
   )
 
   const currentPlan = selectedRecord ? deriveActionPlan(selectedRecord) : null
+  const currentCompletion = selectedRecord ? getCompletionSummary(selectedRecord) : null
   const isDirty = selectedRecord ? normalizeText(draft) !== normalizeText(selectedRecord.thought.body) : false
   const canAnalyze = draft.trim().length > 0
+  const filteredRecords = useMemo(() => {
+    const query = normalizeText(historyQuery).toLowerCase()
+
+    if (!query) {
+      return records
+    }
+
+    return records.filter((record) =>
+      [record.id, record.title, record.analysis.summary, record.thought.body, getSelectedPath(record).title].some((value) =>
+        value.toLowerCase().includes(query)
+      )
+    )
+  }, [historyQuery, records])
 
   useEffect(() => {
-    if (!selectedRecord) {
+    if (typeof window === "undefined") {
       return
     }
 
-    setDraft(selectedRecord.thought.body)
-    setMode(selectedRecord.mode)
-    setActiveChip(selectedRecord.templateId ?? "")
-    setReviewStatus(selectedRecord.review.status)
-    setReviewDraft(selectedRecord.review.note)
-  }, [selectedRecordId])
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY)
+
+      if (!raw) {
+        return
+      }
+
+      const parsed = JSON.parse(raw) as Partial<PersistedWorkspaceState>
+
+      if (!Array.isArray(parsed.records) || parsed.records.length === 0) {
+        return
+      }
+
+      const hydratedRecords = parsed.records.map((record) => hydrateStoredRecord(record))
+      const fallbackRecord = hydratedRecords[0]
+      const nextSelectedRecord =
+        hydratedRecords.find((record) => record.id === parsed.selectedRecordId) ?? fallbackRecord
+
+      setRecords(hydratedRecords)
+      setSelectedRecordId(nextSelectedRecord.id)
+      setDraft(typeof parsed.draft === "string" ? parsed.draft : nextSelectedRecord.thought.body)
+      setMode(isMode(parsed.mode) ? parsed.mode : nextSelectedRecord.mode)
+      setActiveChip(typeof parsed.activeChip === "string" ? parsed.activeChip : nextSelectedRecord.templateId ?? "")
+      setReviewStatus(isReviewStatus(parsed.reviewStatus) ? parsed.reviewStatus : nextSelectedRecord.review.status)
+      setReviewDraft(typeof parsed.reviewDraft === "string" ? parsed.reviewDraft : nextSelectedRecord.review.note)
+      setHistoryQuery(typeof parsed.historyQuery === "string" ? parsed.historyQuery : "")
+      setNextRunNumber(typeof parsed.nextRunNumber === "number" ? parsed.nextRunNumber : getNextRunNumber(hydratedRecords))
+      setLastSavedAt(typeof parsed.lastSavedAt === "string" ? parsed.lastSavedAt : null)
+    } catch {
+      // Ignore invalid local workspace state and fall back to seed data.
+    } finally {
+      hasHydratedWorkspace.current = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hasHydratedWorkspace.current || typeof window === "undefined") {
+      return
+    }
+
+    const nextSavedAt = formatTimestamp()
+    const payload: PersistedWorkspaceState = {
+      version: 2,
+      records,
+      selectedRecordId,
+      draft,
+      mode,
+      activeChip,
+      reviewStatus,
+      reviewDraft,
+      nextRunNumber,
+      historyQuery,
+      lastSavedAt: nextSavedAt
+    }
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+    setLastSavedAt(nextSavedAt)
+  }, [records, selectedRecordId, draft, mode, activeChip, reviewStatus, reviewDraft, nextRunNumber, historyQuery])
 
   function focusEditor() {
     requestAnimationFrame(() => {
       editorRef.current?.focus()
       editorRef.current?.setSelectionRange(editorRef.current.value.length, editorRef.current.value.length)
     })
+  }
+
+  function openRecord(record: WorkspaceRecord) {
+    setSelectedRecordId(record.id)
+    setDraft(record.thought.body)
+    setMode(record.mode)
+    setActiveChip(record.templateId ?? "")
+    setReviewStatus(record.review.status)
+    setReviewDraft(record.review.note)
   }
 
   function handleAnalyze() {
@@ -700,13 +874,20 @@ export default function HomePage() {
 
     startTransition(() => {
       setRecords((current) => [record, ...current])
-      setSelectedRecordId(record.id)
       setNextRunNumber((current) => current + 1)
     })
+
+    openRecord(record)
   }
 
   function handleSelectHistory(recordId: string) {
-    setSelectedRecordId(recordId)
+    const record = records.find((item) => item.id === recordId)
+
+    if (!record) {
+      return
+    }
+
+    openRecord(record)
   }
 
   function handleExampleSelect(scenario: ScenarioTemplate) {
@@ -722,6 +903,35 @@ export default function HomePage() {
 
     setRecords((current) =>
       current.map((record) => (record.id === selectedRecord.id ? { ...record, selectedPathId: pathId } : record))
+    )
+  }
+
+  function handleTogglePlanItem(scope: "today" | "week", item: string) {
+    if (!selectedRecord || !currentPlan) {
+      return
+    }
+
+    setRecords((current) =>
+      current.map((record) => {
+        if (record.id !== selectedRecord.id) {
+          return record
+        }
+
+        const currentExecution = getExecutionProgress(record, currentPlan.selectedPath.id)
+        const nextKey = scope === "today" ? "todayChecked" : "weekChecked"
+
+        return {
+          ...record,
+          execution: {
+            ...record.execution,
+            [currentPlan.selectedPath.id]: {
+              ...currentExecution,
+              [nextKey]: toggleEntry(currentExecution[nextKey], item),
+              updatedAt: formatTimestamp()
+            }
+          }
+        }
+      })
     )
   }
 
@@ -769,6 +979,8 @@ export default function HomePage() {
   function handleNewThought() {
     setDraft("")
     setActiveChip("")
+    setReviewStatus("not_started")
+    setReviewDraft("")
     focusEditor()
   }
 
@@ -787,6 +999,9 @@ export default function HomePage() {
 
           <div className="flex flex-wrap items-center gap-3 text-sm text-white/[0.6]">
             <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">Saved Analyses {records.length}</div>
+            <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
+              {lastSavedAt ? `Local Save ${lastSavedAt}` : "Local Save Pending"}
+            </div>
             <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5">
               模糊想法 → 结构化认知 → 可执行路径
             </div>
@@ -810,10 +1025,21 @@ export default function HomePage() {
                 </button>
               </div>
 
+              <div className="mt-4">
+                <input
+                  type="search"
+                  value={historyQuery}
+                  onChange={(event) => setHistoryQuery(event.target.value)}
+                  placeholder="搜索 Thought / 路径 / run"
+                  className="w-full rounded-[18px] border border-white/10 bg-black/[0.18] px-4 py-3 text-sm text-white/[0.84] outline-none transition duration-200 placeholder:text-white/[0.24] focus:border-white/[0.18] focus:bg-black/[0.24]"
+                />
+              </div>
+
               <div className="mt-4 space-y-3">
-                {records.map((record) => {
+                {filteredRecords.map((record) => {
                   const active = record.id === selectedRecord.id
                   const selectedPath = getSelectedPath(record)
+                  const completion = getCompletionSummary(record)
 
                   return (
                     <button
@@ -849,6 +1075,9 @@ export default function HomePage() {
                         >
                           {reviewMeta[record.review.status].label}
                         </span>
+                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] text-white/[0.52]">
+                          执行 {completion.completed}/{completion.total}
+                        </span>
                       </div>
 
                       {record.parentId ? (
@@ -857,6 +1086,12 @@ export default function HomePage() {
                     </button>
                   )
                 })}
+
+                {filteredRecords.length === 0 ? (
+                  <div className="rounded-[24px] border border-dashed border-white/10 bg-black/[0.16] px-4 py-5 text-sm leading-6 text-white/[0.5]">
+                    没有匹配的历史记录。换一个关键词，或者直接新建 Thought。
+                  </div>
+                ) : null}
               </div>
             </section>
           </aside>
@@ -979,7 +1214,7 @@ export default function HomePage() {
                     ["Run", selectedRecord.id],
                     ["Created", selectedRecord.createdAt],
                     ["Lens", modeMeta[selectedRecord.mode].label],
-                    ["Review", reviewMeta[selectedRecord.review.status].label]
+                    ["Progress", currentCompletion ? `${currentCompletion.completed}/${currentCompletion.total}` : "0/0"]
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
                       <div className="text-white/[0.34]">{label}</div>
@@ -1075,6 +1310,7 @@ export default function HomePage() {
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
                     {selectedRecord.paths.map((path) => {
                       const active = path.id === selectedRecord.selectedPathId
+                      const pathCompletion = getCompletionSummary(selectedRecord, path.id)
 
                       return (
                         <button
@@ -1096,6 +1332,9 @@ export default function HomePage() {
                             ) : null}
                           </div>
                           <div className="mt-3 text-sm leading-6 text-white/70">{path.summary}</div>
+                          <div className="mt-4 rounded-[18px] border border-white/10 bg-black/[0.18] px-3 py-2 text-xs text-white/[0.56]">
+                            执行进度 {pathCompletion.completed}/{pathCompletion.total}
+                          </div>
                           <div className="mt-4 text-[11px] uppercase tracking-[0.16em] text-white/30">代价</div>
                           <div className="mt-1 text-sm leading-6 text-white/60">{path.cost}</div>
                           <div className="mt-3 text-[11px] uppercase tracking-[0.16em] text-white/30">可能结果</div>
@@ -1116,33 +1355,92 @@ export default function HomePage() {
                       <div className="text-sm text-white/[0.42]">Action Plan</div>
                       <div className="mt-1 text-sm text-white/[0.58]">执行板始终基于当前选定路径生成。</div>
                     </div>
-                    <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/[0.58]">
-                      {currentPlan.selectedPath.title}
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/[0.58]">
+                        {currentPlan.selectedPath.title}
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/[0.58]">
+                        完成 {currentCompletion?.completed ?? 0}/{currentCompletion?.total ?? 0}
+                      </div>
                     </div>
                   </div>
 
                   <div className="mt-4 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
                     <div className="rounded-[24px] border border-white/[0.16] bg-white/[0.06] p-4">
-                      <div className="text-sm text-white/[0.42]">Today</div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm text-white/[0.42]">Today</div>
+                        <div className="text-xs text-white/[0.46]">
+                          {currentPlan.execution.todayChecked.length}/{currentPlan.today.length}
+                        </div>
+                      </div>
                       <div className="mt-3 space-y-3">
-                        {currentPlan.today.map((item, index) => (
-                          <div key={item} className="rounded-[20px] border border-white/10 bg-black/[0.18] px-4 py-4">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-white/30">Step {index + 1}</div>
-                            <div className="mt-2 text-sm leading-6 text-white/[0.74]">{item}</div>
-                          </div>
-                        ))}
+                        {currentPlan.today.map((item, index) => {
+                          const checked = currentPlan.execution.todayChecked.includes(item)
+
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => handleTogglePlanItem("today", item)}
+                              className={`flex w-full items-start gap-3 rounded-[20px] border px-4 py-4 text-left transition duration-200 ${
+                                checked
+                                  ? "border-white/[0.18] bg-white/[0.1]"
+                                  : "border-white/10 bg-black/[0.18] hover:border-white/[0.16] hover:bg-white/[0.05]"
+                              }`}
+                            >
+                              <span
+                                className={`mt-1 h-5 w-5 shrink-0 rounded-full border transition duration-200 ${
+                                  checked ? "border-white bg-white" : "border-white/20 bg-transparent"
+                                }`}
+                              />
+                              <span className="min-w-0">
+                                <span className="text-[11px] uppercase tracking-[0.16em] text-white/30">Step {index + 1}</span>
+                                <span
+                                  className={`mt-2 block text-sm leading-6 ${
+                                    checked ? "text-white/95 line-through decoration-white/30" : "text-white/[0.74]"
+                                  }`}
+                                >
+                                  {item}
+                                </span>
+                              </span>
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
 
                     <div className="space-y-4">
                       <div className="rounded-[24px] border border-white/10 bg-black/[0.18] p-4">
-                        <div className="text-sm text-white/[0.42]">This Week</div>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm text-white/[0.42]">This Week</div>
+                          <div className="text-xs text-white/[0.46]">
+                            {currentPlan.execution.weekChecked.length}/{currentPlan.thisWeek.length}
+                          </div>
+                        </div>
                         <div className="mt-3 space-y-2">
-                          {currentPlan.thisWeek.map((item) => (
-                            <div key={item} className="rounded-[18px] border border-white/10 bg-white/[0.03] px-3.5 py-3 text-sm text-white/70">
-                              {item}
-                            </div>
-                          ))}
+                          {currentPlan.thisWeek.map((item) => {
+                            const checked = currentPlan.execution.weekChecked.includes(item)
+
+                            return (
+                              <button
+                                key={item}
+                                type="button"
+                                onClick={() => handleTogglePlanItem("week", item)}
+                                className={`flex w-full items-start gap-3 rounded-[18px] border px-3.5 py-3 text-left text-sm transition duration-200 ${
+                                  checked
+                                    ? "border-white/[0.16] bg-white/[0.08] text-white/90"
+                                    : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/[0.16] hover:bg-white/[0.05]"
+                                }`}
+                              >
+                                <span
+                                  className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border transition duration-200 ${
+                                    checked ? "border-white bg-white" : "border-white/20 bg-transparent"
+                                  }`}
+                                />
+                                <span className={checked ? "line-through decoration-white/30" : ""}>{item}</span>
+                              </button>
+                            )
+                          })}
                         </div>
                       </div>
 
