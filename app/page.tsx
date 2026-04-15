@@ -79,6 +79,19 @@ type WorkspaceSyncResponse = {
   state: PersistedWorkspaceState | null
 }
 
+type AccountIdentity = {
+  handle: string
+  displayName: string
+  workspaceId: string
+  updatedAt: string
+}
+
+type AccountResponse = {
+  identity: AccountIdentity | null
+  workspaceId: string
+  error?: string
+}
+
 type CloudStatus = "connecting" | "saving" | "synced" | "local-only" | "error"
 
 export default function HomePage() {
@@ -97,9 +110,14 @@ export default function HomePage() {
   const [analysisNotice, setAnalysisNotice] = useState<string | null>(null)
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>("connecting")
   const [cloudSessionId, setCloudSessionId] = useState<string | null>(null)
+  const [accountIdentity, setAccountIdentity] = useState<AccountIdentity | null>(null)
+  const [accountDisplayName, setAccountDisplayName] = useState("")
+  const [accountHandle, setAccountHandle] = useState("")
+  const [accountPassphrase, setAccountPassphrase] = useState("")
+  const [accountNotice, setAccountNotice] = useState<string | null>(null)
+  const [isAccountBusy, setIsAccountBusy] = useState(false)
   const [localReady, setLocalReady] = useState(false)
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
-  const hasHydratedWorkspace = useRef(false)
   const hasLocalWorkspace = useRef(false)
   const hasConnectedCloud = useRef(false)
 
@@ -166,6 +184,35 @@ export default function HomePage() {
     }
   }
 
+  function resetToSeedWorkspace() {
+    const seededRecords = buildSeedRecords().map(hydrateStoredRecord)
+    const firstRecord = seededRecords[0]
+
+    setRecords(seededRecords)
+    setSelectedRecordId(firstRecord.id)
+    setDraft(firstRecord.thought.body)
+    setMode(firstRecord.mode)
+    setActiveChip(firstRecord.templateId ?? "")
+    setReviewStatus(firstRecord.review.status)
+    setReviewDraft(firstRecord.review.note)
+    setHistoryQuery("")
+    setNextRunNumber(getNextRunNumber(seededRecords))
+    setLastSavedAt(null)
+    setAnalysisNotice(`当前分析来源：${analysisProviderMeta[firstRecord.analysisProvider]}`)
+  }
+
+  async function fetchWorkspaceSnapshot() {
+    const response = await fetch("/api/workspace", {
+      cache: "no-store"
+    })
+
+    if (!response.ok) {
+      throw new Error("Cloud fetch failed")
+    }
+
+    return (await response.json()) as WorkspaceSyncResponse
+  }
+
   async function saveWorkspaceToCloud(payload: PersistedWorkspaceState) {
     const response = await fetch("/api/workspace", {
       method: "PUT",
@@ -186,6 +233,22 @@ export default function HomePage() {
     }
   }
 
+  async function loadAccountIdentity() {
+    const response = await fetch("/api/account", {
+      cache: "no-store"
+    })
+
+    if (!response.ok) {
+      throw new Error("Account fetch failed")
+    }
+
+    const payload = (await response.json()) as AccountResponse
+    setAccountIdentity(payload.identity)
+    setCloudSessionId(payload.workspaceId)
+
+    return payload
+  }
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return
@@ -204,7 +267,6 @@ export default function HomePage() {
     } catch {
       // Ignore invalid local workspace state and fall back to seed data.
     } finally {
-      hasHydratedWorkspace.current = true
       setLocalReady(true)
     }
   }, [])
@@ -231,16 +293,7 @@ export default function HomePage() {
     async function connectCloud() {
       try {
         setCloudStatus("connecting")
-
-        const response = await fetch("/api/workspace", {
-          cache: "no-store"
-        })
-
-        if (!response.ok) {
-          throw new Error("Cloud fetch failed")
-        }
-
-        const payload = (await response.json()) as WorkspaceSyncResponse
+        const payload = await fetchWorkspaceSnapshot()
 
         if (cancelled) {
           return
@@ -282,6 +335,16 @@ export default function HomePage() {
   }, [localReady])
 
   useEffect(() => {
+    if (!localReady) {
+      return
+    }
+
+    void loadAccountIdentity().catch(() => {
+      setAccountIdentity(null)
+    })
+  }, [localReady])
+
+  useEffect(() => {
     if (!localReady || !hasConnectedCloud.current) {
       return
     }
@@ -316,6 +379,135 @@ export default function HomePage() {
     setReviewStatus(record.review.status)
     setReviewDraft(record.review.note)
     setAnalysisNotice(`当前分析来源：${analysisProviderMeta[record.analysisProvider]}`)
+  }
+
+  function clearAccountForm() {
+    setAccountDisplayName("")
+    setAccountHandle("")
+    setAccountPassphrase("")
+  }
+
+  async function handleAccountCreate() {
+    if (isAccountBusy) {
+      return
+    }
+
+    setIsAccountBusy(true)
+    setAccountNotice(null)
+
+    try {
+      const response = await fetch("/api/account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          action: "create",
+          displayName: accountDisplayName,
+          handle: accountHandle,
+          passphrase: accountPassphrase
+        })
+      })
+
+      const payload = (await response.json()) as AccountResponse
+
+      if (!response.ok || !payload.identity) {
+        throw new Error(payload.error || "创建账号失败。")
+      }
+
+      setAccountIdentity(payload.identity)
+      setCloudSessionId(payload.workspaceId)
+      setCloudStatus("synced")
+      setAccountNotice("同步账号已创建。另一台设备现在可以用这组 handle 和口令登录同一工作区。")
+      clearAccountForm()
+    } catch (error) {
+      setAccountNotice(error instanceof Error ? error.message : "创建账号失败。")
+    } finally {
+      setIsAccountBusy(false)
+    }
+  }
+
+  async function handleAccountSignIn() {
+    if (isAccountBusy) {
+      return
+    }
+
+    setIsAccountBusy(true)
+    setAccountNotice(null)
+
+    try {
+      const response = await fetch("/api/account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          action: "sign_in",
+          handle: accountHandle,
+          passphrase: accountPassphrase
+        })
+      })
+
+      const payload = (await response.json()) as AccountResponse
+
+      if (!response.ok || !payload.identity) {
+        throw new Error(payload.error || "登录失败。")
+      }
+
+      setAccountIdentity(payload.identity)
+      setCloudSessionId(payload.workspaceId)
+      hasLocalWorkspace.current = false
+      setCloudStatus("connecting")
+
+      const workspace = await fetchWorkspaceSnapshot()
+
+      if (workspace.state) {
+        applyPersistedState(workspace.state)
+      } else {
+        resetToSeedWorkspace()
+      }
+
+      setCloudStatus("synced")
+      setAccountNotice(`已登录 ${payload.identity.handle}，当前工作区已切换到云端版本。`)
+      clearAccountForm()
+    } catch (error) {
+      setAccountNotice(error instanceof Error ? error.message : "登录失败。")
+    } finally {
+      setIsAccountBusy(false)
+    }
+  }
+
+  async function handleAccountSignOut() {
+    if (isAccountBusy) {
+      return
+    }
+
+    setIsAccountBusy(true)
+    setAccountNotice(null)
+
+    try {
+      const response = await fetch("/api/account", {
+        method: "DELETE"
+      })
+
+      const payload = (await response.json()) as AccountResponse
+
+      if (!response.ok) {
+        throw new Error(payload.error || "退出失败。")
+      }
+
+      setAccountIdentity(null)
+      setCloudSessionId(payload.workspaceId)
+      hasLocalWorkspace.current = false
+      resetToSeedWorkspace()
+      setCloudStatus("saving")
+      setAccountNotice("已退出同步账号，当前浏览器回到新的匿名工作区。")
+      clearAccountForm()
+    } catch (error) {
+      setAccountNotice(error instanceof Error ? error.message : "退出失败。")
+    } finally {
+      setIsAccountBusy(false)
+    }
   }
 
   async function handleAnalyze() {
@@ -521,6 +713,86 @@ export default function HomePage() {
 
         <div className="grid gap-6 py-6 xl:grid-cols-[300px_minmax(0,1fr)]">
           <aside className="space-y-6">
+            <section className="glass-panel rounded-shell p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm text-white/[0.42]">Sync Account</div>
+                  <div className="mt-1 text-xs leading-5 text-white/[0.54]">
+                    把当前工作区绑定到一个 handle。另一台设备输入同一组账号信息，就能拉回同一份云端工作区。
+                  </div>
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-white/[0.52]">
+                  {accountIdentity ? "Bound" : "Not Bound"}
+                </div>
+              </div>
+
+              {accountIdentity ? (
+                <div className="mt-4 rounded-[24px] border border-white/10 bg-black/[0.18] p-4">
+                  <div className="text-sm font-medium text-white/[0.86]">{accountIdentity.displayName}</div>
+                  <div className="mt-2 text-xs uppercase tracking-[0.16em] text-white/[0.36]">@{accountIdentity.handle}</div>
+                  <div className="mt-3 rounded-[18px] border border-white/10 bg-white/[0.03] px-3 py-3 text-sm leading-6 text-white/[0.62]">
+                    当前浏览器已绑定到这个同步账号。换设备后，用同一个 handle 和口令登录就能继续。
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAccountSignOut}
+                    disabled={isAccountBusy}
+                    className="mt-4 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/[0.74] transition duration-200 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    退出当前同步账号
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  <input
+                    type="text"
+                    value={accountDisplayName}
+                    onChange={(event) => setAccountDisplayName(event.target.value)}
+                    placeholder="显示名称，例如 Zhong"
+                    className="w-full rounded-[18px] border border-white/10 bg-black/[0.18] px-4 py-3 text-sm text-white/[0.84] outline-none transition duration-200 placeholder:text-white/[0.24] focus:border-white/[0.18] focus:bg-black/[0.24]"
+                  />
+                  <input
+                    type="text"
+                    value={accountHandle}
+                    onChange={(event) => setAccountHandle(event.target.value)}
+                    placeholder="handle，例如 zhong-trace"
+                    className="w-full rounded-[18px] border border-white/10 bg-black/[0.18] px-4 py-3 text-sm text-white/[0.84] outline-none transition duration-200 placeholder:text-white/[0.24] focus:border-white/[0.18] focus:bg-black/[0.24]"
+                  />
+                  <input
+                    type="password"
+                    value={accountPassphrase}
+                    onChange={(event) => setAccountPassphrase(event.target.value)}
+                    placeholder="同步口令，至少 8 位"
+                    className="w-full rounded-[18px] border border-white/10 bg-black/[0.18] px-4 py-3 text-sm text-white/[0.84] outline-none transition duration-200 placeholder:text-white/[0.24] focus:border-white/[0.18] focus:bg-black/[0.24]"
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={handleAccountCreate}
+                      disabled={isAccountBusy}
+                      className="rounded-2xl bg-white px-4 py-3 text-sm font-medium text-black transition duration-200 hover:translate-y-[-1px] hover:bg-white/[0.92] disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/50"
+                    >
+                      {isAccountBusy ? "处理中…" : "创建同步账号"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAccountSignIn}
+                      disabled={isAccountBusy}
+                      className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/[0.74] transition duration-200 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      登录已有账号
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {accountNotice ? (
+                <div className="mt-4 rounded-[20px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white/[0.62]">
+                  {accountNotice}
+                </div>
+              ) : null}
+            </section>
+
             <section className="glass-panel rounded-shell p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
