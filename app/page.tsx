@@ -559,7 +559,17 @@ export default function HomePage() {
           id,
           createdAt,
           parentId,
-          preferredPathId
+          preferredPathId,
+          previousContext:
+            parentId && selectedRecord
+              ? {
+                  thought: selectedRecord.thought.body,
+                  summary: selectedRecord.analysis.summary,
+                  selectedPathTitle: getSelectedPath(selectedRecord).title,
+                  reviewStatus: selectedRecord.review.status,
+                  reviewNote: selectedRecord.review.note
+                }
+              : null
         })
       })
 

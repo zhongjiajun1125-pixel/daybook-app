@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { analyzeThoughtToRecord } from "@/lib/server-analysis"
-import { isMode } from "@/lib/workspace-core"
+import { isMode, isReviewStatus } from "@/lib/workspace-core"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -15,6 +15,21 @@ export async function POST(request: Request) {
     const createdAt = typeof body?.createdAt === "string" ? body.createdAt : ""
     const parentId = typeof body?.parentId === "string" ? body.parentId : null
     const preferredPathId = typeof body?.preferredPathId === "string" ? body.preferredPathId : null
+    const previousContext =
+      body?.previousContext &&
+      typeof body.previousContext === "object" &&
+      typeof body.previousContext.thought === "string" &&
+      typeof body.previousContext.summary === "string" &&
+      typeof body.previousContext.selectedPathTitle === "string" &&
+      isReviewStatus(body.previousContext.reviewStatus)
+        ? {
+            thought: body.previousContext.thought,
+            summary: body.previousContext.summary,
+            selectedPathTitle: body.previousContext.selectedPathTitle,
+            reviewStatus: body.previousContext.reviewStatus,
+            reviewNote: typeof body.previousContext.reviewNote === "string" ? body.previousContext.reviewNote : ""
+          }
+        : null
 
     if (!thought) {
       return NextResponse.json({ error: "Thought is required." }, { status: 400 })
@@ -34,7 +49,8 @@ export async function POST(request: Request) {
       id,
       createdAt,
       parentId,
-      preferredPathId
+      preferredPathId,
+      previousContext
     })
 
     return NextResponse.json({ record })
