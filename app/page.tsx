@@ -62,9 +62,24 @@ const analysisProviderMeta = {
   openai: "OpenAI"
 } as const
 
+const cloudStatusMeta: Record<CloudStatus, string> = {
+  connecting: "Cloud connecting",
+  saving: "Cloud saving",
+  synced: "Cloud synced",
+  "local-only": "Local only",
+  error: "Cloud error"
+}
+
 type AnalyzeResponse = {
   record: WorkspaceRecord
 }
+
+type WorkspaceSyncResponse = {
+  sessionId: string
+  state: PersistedWorkspaceState | null
+}
+
+type CloudStatus = "connecting" | "saving" | "synced" | "local-only" | "error"
 
 export default function HomePage() {
   const initialRecords = useMemo(() => buildSeedRecords().map(hydrateStoredRecord), [])
@@ -80,8 +95,13 @@ export default function HomePage() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisNotice, setAnalysisNotice] = useState<string | null>(null)
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus>("connecting")
+  const [cloudSessionId, setCloudSessionId] = useState<string | null>(null)
+  const [localReady, setLocalReady] = useState(false)
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
   const hasHydratedWorkspace = useRef(false)
+  const hasLocalWorkspace = useRef(false)
+  const hasConnectedCloud = useRef(false)
 
   const selectedRecord = useMemo(
     () => records.find((record) => record.id === selectedRecordId) ?? records[0],
@@ -106,6 +126,66 @@ export default function HomePage() {
     )
   }, [historyQuery, records])
 
+  function applyPersistedState(parsed: Partial<PersistedWorkspaceState>) {
+    if (!Array.isArray(parsed.records) || parsed.records.length === 0) {
+      return false
+    }
+
+    const hydratedRecords = parsed.records.map((record) => hydrateStoredRecord(record))
+    const fallbackRecord = hydratedRecords[0]
+    const nextSelectedRecord = hydratedRecords.find((record) => record.id === parsed.selectedRecordId) ?? fallbackRecord
+
+    setRecords(hydratedRecords)
+    setSelectedRecordId(nextSelectedRecord.id)
+    setDraft(typeof parsed.draft === "string" ? parsed.draft : nextSelectedRecord.thought.body)
+    setMode(isMode(parsed.mode) ? parsed.mode : nextSelectedRecord.mode)
+    setActiveChip(typeof parsed.activeChip === "string" ? parsed.activeChip : nextSelectedRecord.templateId ?? "")
+    setReviewStatus(isReviewStatus(parsed.reviewStatus) ? parsed.reviewStatus : nextSelectedRecord.review.status)
+    setReviewDraft(typeof parsed.reviewDraft === "string" ? parsed.reviewDraft : nextSelectedRecord.review.note)
+    setHistoryQuery(typeof parsed.historyQuery === "string" ? parsed.historyQuery : "")
+    setNextRunNumber(typeof parsed.nextRunNumber === "number" ? parsed.nextRunNumber : getNextRunNumber(hydratedRecords))
+    setLastSavedAt(typeof parsed.lastSavedAt === "string" ? parsed.lastSavedAt : null)
+    setAnalysisNotice(`当前分析来源：${analysisProviderMeta[nextSelectedRecord.analysisProvider]}`)
+
+    return true
+  }
+
+  function buildPersistedStatePayload(savedAt = formatTimestamp()): PersistedWorkspaceState {
+    return {
+      version: 2,
+      records,
+      selectedRecordId,
+      draft,
+      mode,
+      activeChip,
+      reviewStatus,
+      reviewDraft,
+      nextRunNumber,
+      historyQuery,
+      lastSavedAt: savedAt
+    }
+  }
+
+  async function saveWorkspaceToCloud(payload: PersistedWorkspaceState) {
+    const response = await fetch("/api/workspace", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      throw new Error("Cloud save failed")
+    }
+
+    const data = (await response.json()) as WorkspaceSyncResponse
+
+    if (data.sessionId) {
+      setCloudSessionId(data.sessionId)
+    }
+  }
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return
@@ -118,57 +198,108 @@ export default function HomePage() {
         return
       }
 
+      hasLocalWorkspace.current = true
       const parsed = JSON.parse(raw) as Partial<PersistedWorkspaceState>
-
-      if (!Array.isArray(parsed.records) || parsed.records.length === 0) {
-        return
-      }
-
-      const hydratedRecords = parsed.records.map((record) => hydrateStoredRecord(record))
-      const fallbackRecord = hydratedRecords[0]
-      const nextSelectedRecord =
-        hydratedRecords.find((record) => record.id === parsed.selectedRecordId) ?? fallbackRecord
-
-      setRecords(hydratedRecords)
-      setSelectedRecordId(nextSelectedRecord.id)
-      setDraft(typeof parsed.draft === "string" ? parsed.draft : nextSelectedRecord.thought.body)
-      setMode(isMode(parsed.mode) ? parsed.mode : nextSelectedRecord.mode)
-      setActiveChip(typeof parsed.activeChip === "string" ? parsed.activeChip : nextSelectedRecord.templateId ?? "")
-      setReviewStatus(isReviewStatus(parsed.reviewStatus) ? parsed.reviewStatus : nextSelectedRecord.review.status)
-      setReviewDraft(typeof parsed.reviewDraft === "string" ? parsed.reviewDraft : nextSelectedRecord.review.note)
-      setHistoryQuery(typeof parsed.historyQuery === "string" ? parsed.historyQuery : "")
-      setNextRunNumber(typeof parsed.nextRunNumber === "number" ? parsed.nextRunNumber : getNextRunNumber(hydratedRecords))
-      setLastSavedAt(typeof parsed.lastSavedAt === "string" ? parsed.lastSavedAt : null)
+      applyPersistedState(parsed)
     } catch {
       // Ignore invalid local workspace state and fall back to seed data.
     } finally {
       hasHydratedWorkspace.current = true
+      setLocalReady(true)
     }
   }, [])
 
   useEffect(() => {
-    if (!hasHydratedWorkspace.current || typeof window === "undefined") {
+    if (!localReady || typeof window === "undefined") {
       return
     }
 
     const nextSavedAt = formatTimestamp()
-    const payload: PersistedWorkspaceState = {
-      version: 2,
-      records,
-      selectedRecordId,
-      draft,
-      mode,
-      activeChip,
-      reviewStatus,
-      reviewDraft,
-      nextRunNumber,
-      historyQuery,
-      lastSavedAt: nextSavedAt
-    }
+    const payload = buildPersistedStatePayload(nextSavedAt)
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     setLastSavedAt(nextSavedAt)
   }, [records, selectedRecordId, draft, mode, activeChip, reviewStatus, reviewDraft, nextRunNumber, historyQuery])
+
+  useEffect(() => {
+    if (!localReady) {
+      return
+    }
+
+    let cancelled = false
+
+    async function connectCloud() {
+      try {
+        setCloudStatus("connecting")
+
+        const response = await fetch("/api/workspace", {
+          cache: "no-store"
+        })
+
+        if (!response.ok) {
+          throw new Error("Cloud fetch failed")
+        }
+
+        const payload = (await response.json()) as WorkspaceSyncResponse
+
+        if (cancelled) {
+          return
+        }
+
+        if (payload.state && !hasLocalWorkspace.current) {
+          hasConnectedCloud.current = true
+          setCloudSessionId(payload.sessionId)
+          applyPersistedState(payload.state)
+          setCloudStatus("synced")
+          return
+        }
+
+        hasConnectedCloud.current = true
+        setCloudSessionId(payload.sessionId)
+
+        if (hasLocalWorkspace.current) {
+          setCloudStatus("saving")
+          await saveWorkspaceToCloud(buildPersistedStatePayload(lastSavedAt ?? formatTimestamp()))
+
+          if (cancelled) {
+            return
+          }
+        }
+
+        setCloudStatus("synced")
+      } catch {
+        if (!cancelled) {
+          setCloudStatus("local-only")
+        }
+      }
+    }
+
+    void connectCloud()
+
+    return () => {
+      cancelled = true
+    }
+  }, [localReady])
+
+  useEffect(() => {
+    if (!localReady || !hasConnectedCloud.current) {
+      return
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setCloudStatus("saving")
+        await saveWorkspaceToCloud(buildPersistedStatePayload(lastSavedAt ?? formatTimestamp()))
+        setCloudStatus("synced")
+      } catch {
+        setCloudStatus("local-only")
+      }
+    }, 900)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [records, selectedRecordId, draft, mode, activeChip, reviewStatus, reviewDraft, nextRunNumber, historyQuery, lastSavedAt])
 
   function focusEditor() {
     requestAnimationFrame(() => {
@@ -374,6 +505,14 @@ export default function HomePage() {
             <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
               {lastSavedAt ? `Local Save ${lastSavedAt}` : "Local Save Pending"}
             </div>
+            <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
+              {cloudStatusMeta[cloudStatus]}
+            </div>
+            {cloudSessionId ? (
+              <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs">
+                Session {cloudSessionId.slice(0, 8)}
+              </div>
+            ) : null}
             <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5">
               模糊想法 → 结构化认知 → 可执行路径
             </div>
