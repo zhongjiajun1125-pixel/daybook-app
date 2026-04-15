@@ -42,7 +42,7 @@ export async function PUT(request: Request) {
   try {
     const body = (await request.json()) as Partial<PersistedWorkspaceState>
 
-    if (!Array.isArray(body.records) || body.records.length === 0) {
+    if (!Array.isArray(body.records)) {
       return NextResponse.json({ error: "Workspace state is invalid." }, { status: 400 })
     }
 
