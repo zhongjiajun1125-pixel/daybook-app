@@ -2,7 +2,7 @@ export type Mode = "deep" | "action"
 
 export type ReviewStatus = "not_started" | "in_progress" | "completed" | "blocked"
 
-export type AnalysisProvider = "heuristic" | "openai"
+export type AnalysisProvider = "heuristic" | "openai" | "groq"
 
 export type Resource = {
   category: string

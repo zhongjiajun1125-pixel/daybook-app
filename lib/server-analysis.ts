@@ -2,6 +2,7 @@ import {
   buildBlueprintFromText,
   buildRecordFromBlueprint,
   type AnalysisBlueprint,
+  type AnalysisProvider,
   type Mode,
   type ReviewStatus,
   type Resource,
@@ -131,7 +132,16 @@ const analysisSystemPrompt = [
 ].join(" ")
 
 const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
+const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b"
 const OPENAI_TIMEOUT_MS = 20000
+
+type ModelBackend = {
+  provider: Exclude<AnalysisProvider, "heuristic">
+  apiKey: string
+  model: string
+  endpoint: string
+  strictSchema: boolean
+}
 
 function trimList(items: string[], fallback: string[], minLength = 3) {
   const cleaned = items.map((item) => item.trim()).filter(Boolean)
@@ -253,6 +263,37 @@ function extractRefusal(payload: any) {
   return refusalBlock?.refusal ?? null
 }
 
+function pickModelBackend(): ModelBackend | null {
+  const groqApiKey = process.env.GROQ_API_KEY
+
+  if (groqApiKey) {
+    const model = process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL
+    const strictSchema = model.startsWith("openai/gpt-oss-")
+
+    return {
+      provider: "groq",
+      apiKey: groqApiKey,
+      model,
+      endpoint: "https://api.groq.com/openai/v1/responses",
+      strictSchema
+    }
+  }
+
+  const openAiApiKey = process.env.OPENAI_API_KEY
+
+  if (openAiApiKey) {
+    return {
+      provider: "openai",
+      apiKey: openAiApiKey,
+      model: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+      endpoint: "https://api.openai.com/v1/responses",
+      strictSchema: true
+    }
+  }
+
+  return null
+}
+
 function buildOpenAIInput(
   thought: string,
   mode: Mode,
@@ -292,33 +333,32 @@ function buildOpenAIInput(
   return sections.join("\n")
 }
 
-async function generateWithOpenAI(
+async function generateWithModelBackend(
   thought: string,
   mode: Mode,
   fallback: AnalysisBlueprint,
   previousContext?: AnalyzeThoughtInput["previousContext"]
 ) {
-  const apiKey = process.env.OPENAI_API_KEY
+  const backend = pickModelBackend()
 
-  if (!apiKey) {
+  if (!backend) {
     return null
   }
 
-  const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS)
   let response: Response
 
   try {
-    response = await fetch("https://api.openai.com/v1/responses", {
+    response = await fetch(backend.endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${backend.apiKey}`,
         "Content-Type": "application/json"
       },
       signal: controller.signal,
       body: JSON.stringify({
-        model,
+        model: backend.model,
         max_output_tokens: 1800,
         input: [
           {
@@ -345,7 +385,7 @@ async function generateWithOpenAI(
             type: "json_schema",
             name: "trace_workspace_analysis",
             description: "Structured TRACE workspace analysis for thought, assumptions, paths, action plan, and review.",
-            strict: true,
+            strict: backend.strictSchema,
             schema: openAiAnalysisSchema
           }
         }
@@ -356,23 +396,26 @@ async function generateWithOpenAI(
   }
 
   if (!response.ok) {
-    throw new Error(`OpenAI request failed with ${response.status}`)
+    throw new Error(`${backend.provider} request failed with ${response.status}`)
   }
 
   const payload = await response.json()
   const refusal = extractRefusal(payload)
 
   if (refusal) {
-    throw new Error(`OpenAI refusal: ${refusal}`)
+    throw new Error(`${backend.provider} refusal: ${refusal}`)
   }
 
   const text = extractJsonText(payload)
 
   if (!text) {
-    throw new Error("OpenAI response did not include text output")
+    throw new Error(`${backend.provider} response did not include text output`)
   }
 
-  return JSON.parse(text) as OpenAIAnalysisShape
+  return {
+    provider: backend.provider,
+    result: JSON.parse(text) as OpenAIAnalysisShape
+  }
 }
 
 export async function analyzeThoughtToRecord({
@@ -387,7 +430,7 @@ export async function analyzeThoughtToRecord({
   const fallback = buildBlueprintFromText(thought, mode, preferredPathId)
 
   try {
-    const generated = await generateWithOpenAI(thought, mode, fallback, previousContext)
+    const generated = await generateWithModelBackend(thought, mode, fallback, previousContext)
 
     if (!generated) {
       return buildRecordFromBlueprint(thought, mode, fallback, {
@@ -398,11 +441,11 @@ export async function analyzeThoughtToRecord({
       })
     }
 
-    return buildRecordFromBlueprint(thought, mode, coerceBlueprint(generated, fallback), {
+    return buildRecordFromBlueprint(thought, mode, coerceBlueprint(generated.result, fallback), {
       id,
       createdAt,
       parentId,
-      analysisProvider: "openai"
+      analysisProvider: generated.provider
     })
   } catch (error) {
     console.error("[TRACE analyzeThoughtToRecord] falling back to heuristic analysis", error)

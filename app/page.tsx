@@ -58,7 +58,8 @@ const reviewMeta: Record<ReviewStatus, { label: string; tone: string }> = {
 
 const analysisProviderMeta = {
   heuristic: "Local Engine",
-  openai: "OpenAI"
+  openai: "OpenAI",
+  groq: "Groq"
 } as const
 
 const cloudStatusMeta: Record<CloudStatus, string> = {
@@ -580,9 +581,9 @@ export default function HomePage() {
       const payload = (await response.json()) as AnalyzeResponse
       record = hydrateStoredRecord(payload.record)
       setAnalysisNotice(
-        payload.record.analysisProvider === "openai"
-          ? "当前分析来源：OpenAI"
-          : "当前未配置模型密钥，已回退到 Local Engine。"
+        payload.record.analysisProvider === "heuristic"
+          ? "当前未配置可用模型密钥，已回退到 Local Engine。"
+          : `当前分析来源：${analysisProviderMeta[payload.record.analysisProvider]}`
       )
     } catch {
       record = buildRecordFromText(draft, mode, {
