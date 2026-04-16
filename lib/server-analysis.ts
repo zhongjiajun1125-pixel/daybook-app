@@ -26,11 +26,14 @@ type AnalyzeThoughtInput = {
 }
 
 type OpenAIAnalysisShape = {
+  templateId?: string | null
   title: string
   thoughtLabel: string
-  summary: string
-  coreProblem: string
-  direction: string
+  analysis: {
+    summary: string
+    coreProblem: string
+    direction: string
+  }
   assumptions: string[]
   resources: Resource[]
   paths: PathOption[]
@@ -46,13 +49,23 @@ type OpenAIAnalysisShape = {
 const openAiAnalysisSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["title", "thoughtLabel", "summary", "coreProblem", "direction", "assumptions", "resources", "paths", "selectedPathId", "planBase"],
+  required: ["templateId", "title", "thoughtLabel", "analysis", "assumptions", "resources", "paths", "selectedPathId", "planBase"],
   properties: {
+    templateId: {
+      anyOf: [{ type: "string" }, { type: "null" }]
+    },
     title: { type: "string" },
     thoughtLabel: { type: "string" },
-    summary: { type: "string" },
-    coreProblem: { type: "string" },
-    direction: { type: "string" },
+    analysis: {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "coreProblem", "direction"],
+      properties: {
+        summary: { type: "string" },
+        coreProblem: { type: "string" },
+        direction: { type: "string" }
+      }
+    },
     assumptions: {
       type: "array",
       minItems: 3,
@@ -228,9 +241,9 @@ function coerceBlueprint(raw: OpenAIAnalysisShape, fallback: AnalysisBlueprint):
     title: trimText(raw.title, fallback.title, 32),
     thoughtLabel: trimText(raw.thoughtLabel, fallback.thoughtLabel, 24),
     analysis: {
-      summary: trimText(raw.summary, fallback.analysis.summary, 90),
-      coreProblem: trimText(raw.coreProblem, fallback.analysis.coreProblem, 180),
-      direction: trimText(raw.direction, fallback.analysis.direction, 180)
+      summary: trimText(raw.analysis?.summary, fallback.analysis.summary, 90),
+      coreProblem: trimText(raw.analysis?.coreProblem, fallback.analysis.coreProblem, 180),
+      direction: trimText(raw.analysis?.direction, fallback.analysis.direction, 180)
     },
     assumptions: trimList(raw.assumptions, fallback.assumptions),
     paths,
@@ -251,6 +264,12 @@ function extractJsonText(payload: any) {
   }
 
   const content = payload?.output?.flatMap((item: any) => item.content ?? []) ?? []
+  const outputBlock = content.find((item: any) => item?.type === "output_text" && typeof item.text === "string")
+
+  if (outputBlock?.text) {
+    return outputBlock.text
+  }
+
   const block = content.find((item: any) => typeof item.text === "string")
 
   return block?.text ?? null
@@ -268,14 +287,13 @@ function pickModelBackend(): ModelBackend | null {
 
   if (groqApiKey) {
     const model = process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL
-    const strictSchema = model.startsWith("openai/gpt-oss-")
 
     return {
       provider: "groq",
       apiKey: groqApiKey,
       model,
       endpoint: "https://api.groq.com/openai/v1/responses",
-      strictSchema
+      strictSchema: false
     }
   }
 
@@ -359,7 +377,10 @@ async function generateWithModelBackend(
       signal: controller.signal,
       body: JSON.stringify({
         model: backend.model,
-        max_output_tokens: 1800,
+        max_output_tokens: backend.provider === "groq" ? 2600 : 1800,
+        reasoning: {
+          effort: backend.provider === "groq" ? "low" : "medium"
+        },
         input: [
           {
             role: "system",
